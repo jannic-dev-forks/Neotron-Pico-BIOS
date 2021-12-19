@@ -66,7 +66,7 @@ struct RenderEngine {
 pub struct TextConsole {
 	current_col: AtomicU16,
 	current_row: AtomicU16,
-	text_buffer: AtomicPtr<u8>,
+	text_buffer: AtomicPtr<u16>,
 }
 
 /// Describes one scan-line's worth of pixels, including the length word required by the Pixel FIFO.
@@ -209,8 +209,8 @@ static mut PIXEL_DATA_BUFFER_ODD: LineBuffer = LineBuffer {
 /// item is an index into `font::FONT_DATA` (or a Code-Page 850 character).
 ///
 /// Written to by Core 0, and read from by `RenderEngine` running on Core 1.
-pub static mut CHAR_ARRAY: [u8; NUM_TEXT_COLS as usize * NUM_TEXT_ROWS as usize] =
-	[0xB2; NUM_TEXT_COLS as usize * NUM_TEXT_ROWS as usize];
+pub static mut CHAR_ARRAY: [u16; NUM_TEXT_COLS as usize * NUM_TEXT_ROWS as usize] =
+	[0xB200; NUM_TEXT_COLS as usize * NUM_TEXT_ROWS as usize];
 
 /// Core 1 entry function.
 ///
@@ -746,8 +746,10 @@ impl RenderEngine {
 				let mut px_idx = 0;
 
 				// Convert from characters to coloured pixels, using the font as a look-up table.
-				for ch in row_slice.iter() {
-					let index = (*ch as isize) * 16;
+				for ch_attr in row_slice.iter() {
+					let ch = ch_attr >> 8;
+					let _attr = ch_attr & 0xFF;
+					let index = (ch as isize) * 16;
 					// Note (unsafe): We use pointer arithmetic here because we
 					// can't afford a bounds-check on an array. This is safe
 					// because the font is `256 * width` bytes long and we can't
@@ -800,7 +802,7 @@ impl TextConsole {
 	/// Update the text buffer we are using.
 	///
 	/// Will reset the cursor. The screen is not cleared.
-	pub fn set_text_buffer(&self, text_buffer: &'static mut [u8; NUM_TEXT_ROWS * NUM_TEXT_COLS]) {
+	pub fn set_text_buffer(&self, text_buffer: &'static mut [u16; NUM_TEXT_ROWS * NUM_TEXT_COLS]) {
 		self.text_buffer
 			.store(text_buffer.as_mut_ptr(), Ordering::Relaxed)
 	}
@@ -816,14 +818,14 @@ impl TextConsole {
 		let buffer = self.text_buffer.load(Ordering::Relaxed);
 
 		if !buffer.is_null() {
-			self.write_at(cp850_char, buffer, &mut row, &mut col);
+			self.write_at(cp850_char, 0, buffer, &mut row, &mut col);
 			// Push back to global state
 			self.current_row.store(row as u16, Ordering::Relaxed);
 			self.current_col.store(col as u16, Ordering::Relaxed);
 		}
 	}
 
-	fn write_at(&self, cp850_char: u8, buffer: *mut u8, row: &mut u16, col: &mut u16) {
+	fn write_at(&self, cp850_char: u8, attr: u8, buffer: *mut u16, row: &mut u16, col: &mut u16) {
 		if cp850_char == b'\r' {
 			*col = 0;
 		} else if cp850_char == b'\n' {
@@ -831,8 +833,9 @@ impl TextConsole {
 			*row += 1;
 		} else {
 			let offset = (*col as usize) + (NUM_TEXT_COLS * (*row as usize));
+			let ch_attr = ((cp850_char as u16) << 8) | (attr as u16);
 			// Note (safety): This is safe as we bound `col` and `row`
-			unsafe { buffer.add(offset).write_volatile(cp850_char) };
+			unsafe { buffer.add(offset).write_volatile(ch_attr) };
 			*col += 1;
 		}
 		if *col == (NUM_TEXT_COLS as u16) {
@@ -851,9 +854,10 @@ impl TextConsole {
 				)
 			};
 
+			let ch_attr = (b' ' as u16) << 8;
 			for blank_col in 0..NUM_TEXT_COLS {
 				let offset = (blank_col as usize) + (NUM_TEXT_COLS * (*row as usize));
-				unsafe { buffer.add(offset).write_volatile(b' ') };
+				unsafe { buffer.add(offset).write_volatile(ch_attr) };
 			}
 		}
 	}
@@ -874,7 +878,7 @@ impl core::fmt::Write for &TextConsole {
 			for ch in s.chars() {
 				let b = if (ch as u32) < 127 { ch as u8 } else { b'?' };
 
-				self.write_at(b, buffer, &mut row, &mut col);
+				self.write_at(b, 0, buffer, &mut row, &mut col);
 			}
 
 			// Push back to global state

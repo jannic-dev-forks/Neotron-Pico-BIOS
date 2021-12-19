@@ -37,6 +37,7 @@
 // Sub-modules
 // -----------------------------------------------------------------------------
 
+pub mod api;
 pub mod vga;
 
 // -----------------------------------------------------------------------------
@@ -49,6 +50,7 @@ use defmt_rtt as _;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_time::rate::*;
 use git_version::git_version;
+use neotron_common_bios as common;
 use panic_probe as _;
 use pico::{
 	self,
@@ -94,7 +96,7 @@ macro_rules! print {
     ($($arg:tt)*) => {
         {
             use core::fmt::Write as _;
-            write!(&TEXT_CONSOLE, $($arg)*).unwrap();
+            write!(&crate::TEXT_CONSOLE, $($arg)*).unwrap();
         }
     };
 }
@@ -106,7 +108,7 @@ macro_rules! println {
     ($($arg:tt)*) => {
         {
             use core::fmt::Write as _;
-            writeln!(&TEXT_CONSOLE, $($arg)*).unwrap();
+            writeln!(&crate::TEXT_CONSOLE, $($arg)*).unwrap();
         }
     };
 }
@@ -225,10 +227,57 @@ fn main() -> ! {
 
 	info!("VGA intialised");
 
-	let mut x: u32 = 0;
-	loop {
-		println!("x = {}", x);
-		x = x.wrapping_add(1);
+	println!(
+		"{} booting...",
+		&api::BIOS_VERSION[..api::BIOS_VERSION.len() - 1]
+	);
+	println!("Copyright (C) 2021 The Neotron Developers");
+	println!("This program comes with ABSOLUTELY NO WARRANTY.");
+	println!("This is free software, and you are welcome to redistribute it");
+	println!("under certain conditions.");
+
+	// We assume the OS can initialise its own memory, as we have no idea how
+	// much it's using so we can't initialise the memory for it.
+
+	// The first four bytes of OS flash must be the address of the start
+	// function. If it looks OK, we call it.
+
+	extern "C" {
+		static _start_osram_sym: u32;
+		static _end_osram_sym: u32;
+		static _start_os_flash_sym: u32;
+		static _end_os_flash_sym: u32;
+	}
+
+	// Note:(unsafe) - only taking address of external static
+	let start_addr = unsafe { &_start_osram_sym as &u32 as *const u32 as usize };
+	let end_addr = unsafe { &_end_osram_sym as &u32 as *const u32 as usize };
+	let length = end_addr - start_addr;
+	println!(
+		"OSRAM 0x{:08x}..0x{:08x} = {} bytes",
+		start_addr, end_addr, length
+	);
+
+	let start_os_flash_address = unsafe { &_start_os_flash_sym as *const u32 as usize };
+	let os_entry_address = unsafe { _start_os_flash_sym } as usize;
+	let end_os_flash_address = unsafe { &_end_os_flash_sym as *const u32 as usize };
+
+	if (os_entry_address >= start_os_flash_address) && (os_entry_address <= end_os_flash_address) {
+		// On this BIOS, the flash split between BIOS and OS is fixed. This value
+		// must match the BIOS linker script and the OS linker script.
+		let code: &common::OsStartFn = unsafe {
+			&*(&_start_os_flash_sym as *const u32
+				as *const for<'r> extern "C" fn(&'r neotron_common_bios::Api) -> !)
+		};
+		code(&api::API_CALLS);
+	} else {
+		println!(
+			"No OS found at 0x{:08x}..0x{:08x} (0x{:08x} is bad)",
+			start_os_flash_address, end_os_flash_address, os_entry_address
+		);
+		loop {
+			cortex_m::asm::wfi();
+		}
 	}
 }
 

@@ -1,8 +1,8 @@
 /**
  * Linker script for the Raspberry Pi Pico.
- * 
+ *
  * Part of the Neotron Pico BIOS.
- * 
+ *
  * This file licenced as CC0.
  */
 
@@ -17,27 +17,39 @@ MEMORY {
      * KiB for the BIOS, leaving the rest
      * for the OS and any user applications.
      */
-    FLASH : ORIGIN = 0x10000100, LENGTH = 128K - 0x100
+    FLASH : ORIGIN = 0x10000100, LENGTH = 0x1FF00
     /*
-     * This is the remainder of the 2048 KiB flash chip.
+     * This is the remainder of the 2048 KiB flash chip on the Pico.
      */
-    FLASH_OS: ORIGIN = 0x10020000, LENGTH = 2048K - 128K
+    FLASH_OS: ORIGIN = 0x10020000, LENGTH = 0x1E0000
     /*
-     * This is the internal SRAM in the RP2040.
+     * The RP2040 has 256 KiB of SRAM striped across four banks (for high
+     * performance), plus a fifth bank containing another 8 KiB of RAM. We
+     * want to be at the top of the high-performance RAM, and we give ourselves
+     * 16 KiB to work with (for stack, text buffer, pixel buffers, etc.).
      */
-    RAM   : ORIGIN = 0x20000000, LENGTH = 256K
+    RAM   : ORIGIN = 0x2003C000, LENGTH = 0x4000
+    /*
+     * This is where the OS and any applications are loaded.
+     */
+    OSRAM (rwx) : ORIGIN = 0x20000000, LENGTH = 0x3C000
 }
-/* This is where the call stack will be allocated. */
-/* The stack is of the full descending type. */
-/* You may want to use this variable to locate the call stack and static
-   variables in different memory regions. Below is shown the default value */
-_stack_start = ORIGIN(RAM) + LENGTH(RAM);
+
+/*
+ * This is where the call stack is located. It is of the full descending
+ * type (i.e. it grows downwards towards 0x2000_0000).
+ *
+ * We start it at the top of the application RAM region.
+ */
+_stack_start = ORIGIN(RAM);
 
 /*
  * Export some symbols to tell the BIOS where it might find the OS.
  */
-_flash_os_start = ORIGIN(FLASH_OS);
-_flash_os_len = LENGTH(FLASH_OS);
+_start_os_flash_sym = ORIGIN(FLASH) + LENGTH(FLASH);
+_end_os_flash_sym = ORIGIN(FLASH) + 256K;
+_start_osram_sym = ORIGIN(OSRAM);
+_end_osram_sym = ORIGIN(OSRAM) + LENGTH(OSRAM);
 
 SECTIONS {
     /* ### RP2040 Boot loader */
@@ -46,3 +58,5 @@ SECTIONS {
         KEEP(*(.boot2));
     } > BOOT2
 } INSERT BEFORE .text;
+
+/* End of file */
