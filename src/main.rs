@@ -43,10 +43,10 @@ pub mod vga;
 // Imports
 // -----------------------------------------------------------------------------
 
-use common::MemoryRegion;
+use common::{video::Attr, video::TextBackgroundColour, video::TextForegroundColour, MemoryRegion};
 use core::fmt::Write;
 use cortex_m_rt::entry;
-use defmt::info;
+use defmt::{debug, info};
 use defmt_rtt as _;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_time::rate::*;
@@ -83,11 +83,11 @@ static BIOS_VERSION: &str = concat!("Neotron Pico BIOS version ", env!("BIOS_VER
 pub static OS_IMAGE: [u8; include_bytes!("flash1002.bin").len()] = *include_bytes!("flash1002.bin");
 
 /// The table of API calls we provide the OS
-static API_CALLS: common::Api = common::Api {
+static BIOS_API: common::Api = common::Api {
 	api_version_get,
 	bios_version_get,
-	serial_configure,
 	serial_get_info,
+	serial_configure,
 	serial_write,
 	serial_read,
 	time_get,
@@ -95,19 +95,36 @@ static API_CALLS: common::Api = common::Api {
 	configuration_get,
 	configuration_set,
 	video_is_valid_mode,
+	video_mode_needs_vram,
 	video_set_mode,
 	video_get_mode,
 	video_get_framebuffer,
 	video_set_framebuffer,
+	video_wait_for_line,
+	video_convert_character,
 	memory_get_region,
-	video_mode_needs_vram,
 	hid_get_event,
 	hid_set_leds,
-	video_wait_for_line,
-	block_dev_get_info,
-	block_write,
-	block_read,
-	block_verify,
+	video_get_palette,
+	video_set_palette,
+	video_set_whole_palette,
+	i2c_bus_get_info,
+	i2c_write_read,
+	audio_mixer_channel_get_info,
+	audio_mixer_channel_set_level,
+	audio_output_set_config,
+	audio_output_get_config,
+	audio_output_data,
+	audio_output_get_space,
+	audio_input_set_config,
+	audio_input_get_config,
+	audio_input_data,
+	audio_input_get_count,
+	bus_select,
+	bus_get_info,
+	bus_write_read,
+	bus_exchange,
+	delay,
 };
 
 extern "C" {
@@ -142,8 +159,8 @@ fn main() -> ! {
 	// Needed by the clock setup
 	let mut watchdog = hal::watchdog::Watchdog::new(pp.WATCHDOG);
 
-	// Run at 126 MHz SYS_PLL, 48 MHz, USB_PLL. This is important, we as clock
-	// the PIO at ÷ 5, to give 25.2 MHz (which is close enough to the 25.175
+	// Run at 252 MHz SYS_PLL, 48 MHz, USB_PLL. This is important, we as clock
+	// the PIO at ÷ 10, to give 25.2 MHz (which is close enough to the 25.175
 	// MHz standard VGA pixel clock).
 
 	// Step 1. Turn on the crystal.
@@ -155,7 +172,7 @@ fn main() -> ! {
 	// Step 3. Create a clocks manager.
 	let mut clocks = hal::clocks::ClocksManager::new(pp.CLOCKS);
 	// Step 4. Set up the system PLL. We take Crystal Oscillator (=12 MHz),
-	// ×126 (=1512 MHz), ÷6 (=252 MHz), ÷2 (=126 MHz)
+	// ×252 (=1512 MHz), ÷6 (=252 MHz), ÷1 (=252 MHz)
 	let pll_sys = hal::pll::setup_pll_blocking(
 		pp.PLL_SYS,
 		xosc.operating_frequency().into(),
@@ -163,7 +180,7 @@ fn main() -> ! {
 			vco_freq: Megahertz(1512),
 			refdiv: 1,
 			post_div1: 6,
-			post_div2: 2,
+			post_div2: 1,
 		},
 		&mut clocks,
 		&mut pp.RESETS,
@@ -227,31 +244,25 @@ fn main() -> ! {
 		&mut pp.PSM,
 	);
 
+	info!("VGA Up");
+
 	// Say hello over VGA (with a bit of a pause)
 	let mut delay = cortex_m::delay::Delay::new(cp.SYST, clocks.system_clock.freq().integer());
 	sign_on(&mut delay);
 
 	// Now jump to the OS
-	let code: &common::OsStartFn = unsafe { ::core::mem::transmute(&_flash_os_start) };
-	code(&API_CALLS);
+	// let code: &common::OsStartFn = unsafe { ::core::mem::transmute(&_flash_os_start) };
+	// code(&BIOS_API);
+
+	loop {
+
+	}
 }
 
 fn sign_on(delay: &mut cortex_m::delay::Delay) {
 	static LICENCE_TEXT: &str = "\
         Copyright © Jonathan 'theJPster' Pallant and the Neotron Developers, 2022\n\
-        \n\
-        This program is free software: you can redistribute it and/or modify\n\
-        it under the terms of the GNU General Public License as published by\n\
-        the Free Software Foundation, either version 3 of the License, or\n\
-        (at your option) any later version.\n\
-        \n\
-        This program is distributed in the hope that it will be useful,\n\
-        but WITHOUT ANY WARRANTY; without even the implied warranty of\n\
-        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n\
-        GNU General Public License for more details.\n\
-        \n\
-        You should have received a copy of the GNU General Public License\n\
-        along with this program.  If not, see https://www.gnu.org/licenses/.\n";
+		Licenced under the GNU GPL v3, or later.\n";
 
 	// Create a new temporary console for some boot-up messages
 	let tc = vga::TextConsole::new();
@@ -264,22 +275,53 @@ fn sign_on(delay: &mut cortex_m::delay::Delay) {
 
 	tc.move_to(0, 0);
 
-	writeln!(&tc, "{}", &BIOS_VERSION[0..BIOS_VERSION.len() - 1]).unwrap();
-	write!(&tc, "{}", LICENCE_TEXT).unwrap();
-
-	writeln!(&tc, "Loading Neotron OS...").unwrap();
-
-	// Wait for a bit
-	for n in [5, 4, 3, 2, 1].iter() {
-		write!(&tc, "{}...", n).unwrap();
-		delay.delay_ms(1000);
-	}
-
-	// A crude way to clear the screen
-	for _col in 0..vga::MAX_TEXT_ROWS {
+	for fg in 0..=15 {
+		tc.set_attribute(Attr::new(
+			TextForegroundColour(15),
+			TextBackgroundColour(0),
+			false,
+		));
+		write!(&tc, "FG {:02}: ", fg).unwrap();
+		for bg in 0..=7 {
+			tc.set_attribute(Attr::new(
+				TextForegroundColour(fg),
+				TextBackgroundColour(bg),
+				false,
+			));
+			write!(&tc, " {:02} ", bg).unwrap();
+		}
 		writeln!(&tc).unwrap();
 	}
-	tc.move_to(0, 0);
+	tc.set_attribute(Attr::new(
+		TextForegroundColour(15),
+		TextBackgroundColour(0),
+		false,
+	));
+
+	writeln!(&tc, "{}", &BIOS_VERSION[0..BIOS_VERSION.len() - 1]).unwrap();
+	write!(&tc, "{}", LICENCE_TEXT).unwrap();
+	
+	// Wait for a bit so you can read the licence.
+	// for n in [5, 4, 3, 2, 1].iter() {
+	// 	write!(&tc, "{}...", n).unwrap();
+	// 	delay.delay_ms(1000);
+	// }
+
+	let mut last_waited_count = 0;
+	let mut last_cant_play_count = 0;
+	loop {
+		// Wait for 1 second (or 60 frames)
+		delay.delay_ms(1000);
+		// We have 480 * 60 lines elapsed. How long on average did we wait per line?
+		let waited_count = vga::RENDER_WAITS_COUNT.load(core::sync::atomic::Ordering::Relaxed);
+		let delta_waited_count = (waited_count - last_waited_count) / (480 * 60);
+		last_waited_count = waited_count;
+		// Also show how many lines we bungled
+		let cant_play_count = vga::CANT_PLAY_COUNT.load(core::sync::atomic::Ordering::Relaxed);
+		let delta_cant_play_count = (cant_play_count - last_cant_play_count);
+		last_cant_play_count = cant_play_count;
+		write!(&tc, "{} clocks/line spare {} dropped lines              \r", delta_waited_count , delta_cant_play_count).unwrap();
+	}
 }
 
 /// Reset the DMA Peripheral.
@@ -422,11 +464,11 @@ pub extern "C" fn video_is_valid_mode(mode: common::video::Mode) -> bool {
 /// pointer to a block of size `Mode::frame_size_bytes()` to
 /// `video_set_framebuffer` before any video will appear.
 pub extern "C" fn video_set_mode(mode: common::video::Mode) -> common::Result<()> {
-	if vga::set_video_mode(mode) {
-		common::Result::Ok(())
-	} else {
-		common::Result::Err(common::Error::UnsupportedConfiguration(0))
-	}
+	// if vga::set_video_mode(mode) {
+	common::Result::Ok(())
+	// } else {
+	// 	common::Result::Err(common::Error::UnsupportedConfiguration(0))
+	// }
 }
 
 /// Returns the video mode the BIOS is currently in.
@@ -558,100 +600,135 @@ pub extern "C" fn video_wait_for_line(line: u16) {
 	}
 }
 
-/// Get information about the Block Devices in the system.
-///
-/// Block Devices are also known as *disk drives*. They can be read from
-/// (and often written to) but only in units called *blocks* or *sectors*.
-///
-/// The BIOS should enumerate removable devices first, followed by fixed
-/// devices.
-///
-/// The set of devices is not expected to change at run-time - removal of
-/// media is indicated with a boolean field in the
-/// `block_dev::DeviceInfo` structure.
-pub extern "C" fn block_dev_get_info(device: u8) -> common::Option<common::block_dev::DeviceInfo> {
-	match device {
-		0 => {
-			common::Option::Some(common::block_dev::DeviceInfo {
-				// This is the built-in SD card slot
-				name: common::types::ApiString::new("SdCard0"),
-				device_type: common::block_dev::DeviceType::SecureDigitalCard,
-				// This is the standard for SD cards
-				block_size: 512,
-				// TODO: scan the card here
-				num_blocks: 0,
-				// No motorised eject
-				ejectable: false,
-				// But you can take the card out
-				removable: true,
-				// Pretend the card is out
-				media_present: true,
-				// Don't care about this value when card is out
-				read_only: false,
-			})
-		}
-		_ => {
-			// Nothing else supported by this BIOS
-			common::Option::None
+extern "C" fn video_get_palette(index: u8) -> common::Option<common::video::RGBColour> {
+	// debug!("video_get_palette({})", index);
+	unimplemented!();
+}
+
+extern "C" fn video_set_palette(index: u8, rgb: common::video::RGBColour) {
+	// debug!("video_set_palette({}, #{:06x})", index, rgb.as_packed());
+	unimplemented!();
+}
+
+unsafe extern "C" fn video_set_whole_palette(
+	palette: *const common::video::RGBColour,
+	length: usize,
+) {
+	// debug!("video_set_whole_palette({:x}, {})", palette, length);
+	unimplemented!();
+}
+
+extern "C" fn video_convert_character(character: u32) -> common::Option<u8> {
+	if let Some(character) = char::from_u32(character) {
+		let glyph = vga::TextConsole::map_char_to_glyph(character);
+		if let Some(glyph) = glyph {
+			return common::Option::Some(glyph.0);
 		}
 	}
+	common::Option::None
 }
 
-/// Write one or more sectors to a block device.
-///
-/// The function will block until all data is written. The array pointed
-/// to by `data` must be `num_blocks * block_size` in length, where
-/// `block_size` is given by `block_dev_get_info`.
-///
-/// There are no requirements on the alignment of `data` but if it is
-/// aligned, the BIOS may be able to use a higher-performance code path.
-pub extern "C" fn block_write(
-	_device: u8,
-	_block: u64,
-	_num_blocks: u8,
-	_data: common::ApiByteSlice,
-) -> common::Result<()> {
-	common::Result::Err(common::Error::Unimplemented)
+extern "C" fn i2c_bus_get_info(_i2c_bus: u8) -> common::Option<common::i2c::BusInfo> {
+	// debug!("i2c_bus_get_info");
+	unimplemented!();
 }
 
-/// Read one or more sectors to a block device.
-///
-/// The function will block until all data is read. The array pointed
-/// to by `data` must be `num_blocks * block_size` in length, where
-/// `block_size` is given by `block_dev_get_info`.
-///
-/// There are no requirements on the alignment of `data` but if it is
-/// aligned, the BIOS may be able to use a higher-performance code path.
-pub extern "C" fn block_read(
-	_device: u8,
-	_block: u64,
-	_num_blocks: u8,
-	_data: common::ApiBuffer,
+extern "C" fn i2c_write_read(
+	_i2c_bus: u8,
+	_i2c_device_address: u8,
+	_tx: common::ApiByteSlice,
+	_tx2: common::ApiByteSlice,
+	_rx: common::ApiBuffer,
 ) -> common::Result<()> {
-	common::Result::Err(common::Error::Unimplemented)
+	// debug!("i2c_write_read");
+	unimplemented!();
 }
 
-/// Verify one or more sectors on a block device (that is read them and
-/// check they match the given data).
-///
-/// The function will block until all data is verified. The array pointed
-/// to by `data` must be `num_blocks * block_size` in length, where
-/// `block_size` is given by `block_dev_get_info`.
-///
-/// There are no requirements on the alignment of `data` but if it is
-/// aligned, the BIOS may be able to use a higher-performance code path.
-pub extern "C" fn block_verify(
-	_device: u8,
-	_block: u64,
-	_num_blocks: u8,
-	_data: common::ApiByteSlice,
+extern "C" fn audio_mixer_channel_get_info(
+	_audio_mixer_id: u8,
+) -> common::Result<common::audio::MixerChannelInfo> {
+	// debug!("audio_mixer_channel_get_info");
+	unimplemented!();
+}
+
+extern "C" fn audio_mixer_channel_set_level(_audio_mixer_id: u8, _level: u8) -> common::Result<()> {
+	// debug!("audio_mixer_channel_set_level");
+	unimplemented!();
+}
+
+extern "C" fn audio_output_set_config(_config: common::audio::Config) -> common::Result<()> {
+	// debug!("audio_output_set_config");
+	unimplemented!();
+}
+
+extern "C" fn audio_output_get_config() -> common::Result<common::audio::Config> {
+	// debug!("audio_output_get_config");
+	unimplemented!();
+}
+
+unsafe extern "C" fn audio_output_data(_samples: common::ApiByteSlice) -> common::Result<usize> {
+	// debug!("audio_output_data");
+	unimplemented!();
+}
+
+extern "C" fn audio_output_get_space() -> common::Result<usize> {
+	// debug!("audio_output_get_space");
+	unimplemented!();
+}
+
+extern "C" fn audio_input_set_config(_config: common::audio::Config) -> common::Result<()> {
+	// debug!("audio_input_set_config");
+	unimplemented!();
+}
+
+extern "C" fn audio_input_get_config() -> common::Result<common::audio::Config> {
+	// debug!("audio_input_get_config");
+	unimplemented!();
+}
+
+extern "C" fn audio_input_data(_samples: common::ApiBuffer) -> common::Result<usize> {
+	// debug!("audio_input_data");
+	unimplemented!();
+}
+
+extern "C" fn audio_input_get_count() -> common::Result<usize> {
+	// debug!("audio_input_get_count");
+	unimplemented!();
+}
+
+extern "C" fn bus_select(_periperal_id: common::Option<u8>) {
+	// debug!("bus_select");
+	unimplemented!();
+}
+
+extern "C" fn bus_get_info(_periperal_id: u8) -> common::Option<common::bus::PeripheralInfo> {
+	// debug!("bus_get_info");
+	unimplemented!();
+}
+
+extern "C" fn bus_write_read(
+	_tx: common::ApiByteSlice,
+	_tx2: common::ApiByteSlice,
+	_rx: common::ApiBuffer,
 ) -> common::Result<()> {
-	common::Result::Err(common::Error::Unimplemented)
+	// debug!("bus_write_read");
+	unimplemented!();
+}
+
+extern "C" fn bus_exchange(_buffer: common::ApiBuffer) -> common::Result<()> {
+	// debug!("bus_exchange");
+	unimplemented!();
+}
+
+extern "C" fn delay(timeout: common::Timeout) {
+	// debug!("delay({} ms)", timeout.get_ms());
+	// TODO!
 }
 
 /// Called when DMA raises IRQ0; i.e. when a DMA transfer to the pixel FIFO or
 /// the timing FIFO has completed.
 #[interrupt]
+#[link_section = ".data"]
 fn DMA_IRQ_0() {
 	unsafe {
 		vga::irq();
