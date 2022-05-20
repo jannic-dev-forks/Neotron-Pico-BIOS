@@ -254,9 +254,7 @@ fn main() -> ! {
 	// let code: &common::OsStartFn = unsafe { ::core::mem::transmute(&_flash_os_start) };
 	// code(&BIOS_API);
 
-	loop {
-
-	}
+	loop {}
 }
 
 fn sign_on(delay: &mut cortex_m::delay::Delay) {
@@ -300,7 +298,7 @@ fn sign_on(delay: &mut cortex_m::delay::Delay) {
 
 	writeln!(&tc, "{}", &BIOS_VERSION[0..BIOS_VERSION.len() - 1]).unwrap();
 	write!(&tc, "{}", LICENCE_TEXT).unwrap();
-	
+
 	// Wait for a bit so you can read the licence.
 	// for n in [5, 4, 3, 2, 1].iter() {
 	// 	write!(&tc, "{}...", n).unwrap();
@@ -320,7 +318,12 @@ fn sign_on(delay: &mut cortex_m::delay::Delay) {
 		let cant_play_count = vga::CANT_PLAY_COUNT.load(core::sync::atomic::Ordering::Relaxed);
 		let delta_cant_play_count = (cant_play_count - last_cant_play_count);
 		last_cant_play_count = cant_play_count;
-		write!(&tc, "{} clocks/line spare {} dropped lines              \r", delta_waited_count , delta_cant_play_count).unwrap();
+		write!(
+			&tc,
+			"{} clocks/line spare {} dropped lines              \r",
+			delta_waited_count, delta_cant_play_count
+		)
+		.unwrap();
 	}
 }
 

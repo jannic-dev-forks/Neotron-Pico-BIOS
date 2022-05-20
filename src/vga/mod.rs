@@ -1242,7 +1242,10 @@ unsafe extern "C" fn core1_main() -> u32 {
 		let mut waited: u32 = 0;
 		waited += render_scanline(&mut PIXEL_DATA_BUFFER_ODD);
 		waited += render_scanline(&mut PIXEL_DATA_BUFFER_EVEN);
-		RENDER_WAITS_COUNT.store(RENDER_WAITS_COUNT.load(Ordering::Relaxed) + waited / 2, Ordering::Relaxed);
+		RENDER_WAITS_COUNT.store(
+			RENDER_WAITS_COUNT.load(Ordering::Relaxed) + waited / 2,
+			Ordering::Relaxed,
+		);
 	}
 }
 
