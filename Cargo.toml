@@ -1,10 +1,10 @@
 [package]
 authors = ["Jonathan 'theJPster' Pallant <github@thejpster.org.uk>"]
 edition = "2018"
-resolver = "2"
-readme = "README.md"
 license = "GPL-3.0-or-later"
 name = "neotron-pico-bios"
+readme = "README.md"
+resolver = "2"
 version = "0.3.0"
 
 [dependencies]
@@ -15,13 +15,13 @@ rp-pico = "0.3"
 # Cortex-M run-time (or start-up) code
 cortex-m-rt = "0.7"
 # The BIOS to OS API
-neotron-common-bios = "0.5.0"
+neotron-common-bios = {git = "https://github.com/neotron-compute/neotron-common-bios", branch = "ansi-console"}
 # For time keeping/handling
 embedded-time = "0.12"
 # For the RP2040 bootloader
 rp2040-boot2 = "0.2"
 # For hardware abstraction traits
-embedded-hal ="0.2"
+embedded-hal = "0.2"
 # Gives us formatted PC-side logging
 defmt = "0.3"
 # Sends defmt logs to the SWD debugger
@@ -35,7 +35,7 @@ pio-proc = "0.2"
 
 [features]
 default = [
-    "defmt-default",
+  "defmt-default",
 ]
 defmt-default = []
 # Enables trace logs
@@ -50,9 +50,9 @@ defmt-warn = []
 defmt-error = []
 
 [[bin]]
+bench = false
 name = "neotron-pico-bios"
 test = false
-bench = false
 
 [profile.release]
 # better optimizations
@@ -61,3 +61,4 @@ codegen-units = 1
 debug = true
 # better optimizations
 lto = true
+opt-level = 3
