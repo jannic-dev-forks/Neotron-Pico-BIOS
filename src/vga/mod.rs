@@ -959,10 +959,10 @@ pub fn init(
 	// | 21    | jmp x-- loop0 | ..               |
 	// | 22    | jmp x-- loop0 | ..               |
 	// | 23    | jmp x-- loop0 | ..               |
-	// | 23    | jmp x-- loop0 | ..               |
 	// | 24    | jmp x-- loop0 | ..               |
-	// | 25    | jmp x-- loop0 | jmp x-- loop1    |
-	// | 26    | jmp x-- loop0 | out pins, 16 [9] |
+	// | 25    | jmp x-- loop0 | ..               |
+	// | 26    | jmp x-- loop0 | jmp x-- loop1    |
+	// | 27    | jmp x-- loop0 | out pins, 16 [9] |
 	//
 	// Note: Credit to
 	// https://gregchadwick.co.uk/blog/playing-with-the-pico-pt5/ who had a
