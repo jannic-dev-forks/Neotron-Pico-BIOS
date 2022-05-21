@@ -80,7 +80,7 @@ struct LineBuffer {
 	/// re-ordered.
 	length: u32,
 	/// Pixels to be displayed, grouped into pairs (to save FIFO space and reduce DMA bandwidth)
-	pixels: [RGBColour; MAX_NUM_PIXEL_PAIRS_PER_LINE * 2],
+	pixels: [RGBPair; MAX_NUM_PIXEL_PAIRS_PER_LINE],
 	/// Set to `true` when the the main loop can fill this buffer with pixels.
 	ready_for_drawing: AtomicBool,
 	/// Which line number should the main loop draw here.
@@ -131,7 +131,7 @@ struct TimingBuffer {
 /// so the PIO can shift them out right-first, and we have RED0 assigned to
 /// the lowest GPIO pin.
 #[repr(transparent)]
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Default)]
 pub struct RGBColour(u16);
 
 /// Represents two `RGBColour` pixels packed together.
@@ -139,7 +139,7 @@ pub struct RGBColour(u16);
 /// The `first` pixel is packed in the lower 16-bits. This is because the PIO
 /// shifts-right.
 #[repr(transparent)]
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Default)]
 pub struct RGBPair(u32);
 
 // -----------------------------------------------------------------------------
@@ -212,7 +212,7 @@ const PIXEL_DMA_CHAN: usize = 1;
 /// Gets written to by `render_scanline()` running on Core 1.
 static mut PIXEL_DATA_BUFFER_EVEN: LineBuffer = LineBuffer {
 	length: 0,
-	pixels: [RGBColour(0); MAX_NUM_PIXEL_PAIRS_PER_LINE * 2],
+	pixels: [RGBPair(0); MAX_NUM_PIXEL_PAIRS_PER_LINE],
 	ready_for_drawing: AtomicBool::new(false),
 	line_number: AtomicU16::new(0),
 };
@@ -224,7 +224,7 @@ static mut PIXEL_DATA_BUFFER_EVEN: LineBuffer = LineBuffer {
 /// Gets written to by `render_scanline()` running on Core 1.
 static mut PIXEL_DATA_BUFFER_ODD: LineBuffer = LineBuffer {
 	length: 0,
-	pixels: [RGBColour(0); MAX_NUM_PIXEL_PAIRS_PER_LINE * 2],
+	pixels: [RGBPair(0); MAX_NUM_PIXEL_PAIRS_PER_LINE],
 	ready_for_drawing: AtomicBool::new(false),
 	line_number: AtomicU16::new(0),
 };
@@ -232,6 +232,69 @@ static mut PIXEL_DATA_BUFFER_ODD: LineBuffer = LineBuffer {
 /// A count of how many lines failed to render in time
 pub static CANT_PLAY_COUNT: AtomicU32 = AtomicU32::new(0);
 pub static RENDER_WAITS_COUNT: AtomicU32 = AtomicU32::new(0);
+
+struct TextColourLookup {
+	entries: [RGBPair; 512],
+}
+
+/// Holds the colour look-up table for text mode.
+///
+/// The input is a 9-bit vlaue comprised of the 4-bit foreground colour index,
+/// the 3-bit background colour index, and a two mono pixels. The output is a
+/// 32-bit RGB Colour Pair, containing two RGB pixels.
+///
+/// ```
+/// +-----+-----+-----+-----+-----+-----+-----+-----+-----+
+/// | FG3 | FG2 | FG1 | FG0 | BG2 | BG1 | BG0 | PX1 | PX0 |
+/// +-----+-----+-----+-----+-----+-----+-----+-----+-----+
+/// ```
+static mut TEXT_COLOUR_LOOKUP: TextColourLookup = TextColourLookup::blank();
+
+impl TextColourLookup {
+	const fn blank() -> TextColourLookup {
+		TextColourLookup {
+			entries: [RGBPair(0); 512],
+		}
+	}
+
+	fn init(&mut self, palette: &[RGBColour]) {
+		for (fg, fg_colour) in palette.iter().take(16).enumerate() {
+			for (bg, bg_colour) in palette.iter().take(8).enumerate() {
+				let attr = Attr::new(
+					TextForegroundColour(fg as u8),
+					TextBackgroundColour(bg as u8),
+					false,
+				);
+				for pixels in 0..=3 {
+					let index: usize = (((attr.0 & 0x7F) as usize) << 2) | (pixels & 0x03) as usize;
+					debug!(
+						"fg = {}, bg = {}, px = {:b}, index = {}",
+						fg, bg, pixels, index
+					);
+					let pair = RGBPair::new(
+						if pixels & 0x02 == 0x02 {
+							*fg_colour
+						} else {
+							*bg_colour
+						},
+						if pixels & 0x01 == 0x01 {
+							*fg_colour
+						} else {
+							*bg_colour
+						},
+					);
+					self.entries[index] = pair;
+				}
+			}
+		}
+	}
+
+	#[inline]
+	fn lookup(&self, attr: Attr, pixels: u8) -> RGBPair {
+		let index: usize = (((attr.0 & 0x7F) as usize) << 2) | (pixels & 0x03) as usize;
+		unsafe { core::ptr::read(self.entries.as_ptr().add(index)) }
+	}
+}
 
 /// Holds the 256-entry palette for indexed colour modes.
 static mut VIDEO_PALETTE: [RGBColour; 256] = [
@@ -1030,7 +1093,13 @@ pub fn init(
 
 	debug!("IRQs enabled");
 
-	debug!("DMA set-up complete");
+	// Note (safety): No-one else is looking at the `TEXT_COLOUR_LOOKUP` table
+	// at this point, and access to `VIDEO_PALETTE` is read-only.
+	unsafe {
+		TEXT_COLOUR_LOOKUP.init(&VIDEO_PALETTE);
+	}
+
+	debug!("Text colour lookup filled");
 
 	// We drop our state-machine and PIO objects here - this means the video
 	// cannot be reconfigured at a later time, but they do keep on running
@@ -1370,6 +1439,12 @@ pub unsafe fn irq() {
 	}
 }
 
+// Notes:
+//
+// Old rendercol code waited 305 loops, or had 1300 clock cycles spare, or took 2982 clocks/line
+// New rendercol code waited 507 loops, or had 2268 clock cycles spare, or took 2087 clocks/line
+// We have 640 pixels, or 6400 clocks per line.
+
 /// Performs the VGA rendering.
 #[link_section = ".data"]
 fn render_scanline(scan_line_buffer: &mut LineBuffer) -> u32 {
@@ -1384,10 +1459,17 @@ fn render_scanline(scan_line_buffer: &mut LineBuffer) -> u32 {
 	let num_rows = NUM_TEXT_ROWS.load(Ordering::Relaxed);
 	let num_cols = NUM_TEXT_COLS.load(Ordering::Relaxed);
 
-	let mut count: u32 = 0;
 	while !scan_line_buffer.is_ready_for_rendering() {
 		// Wait for this buffer to be ready for us
-		count = count.wrapping_add(1);
+	}
+
+	let syst = unsafe { &*cortex_m::peripheral::SYST::ptr() };
+	unsafe {
+		syst.csr.modify(|v| v & !1);
+		syst.csr.modify(|v| v | 4);
+		syst.rvr.write(0xffffff);
+		syst.cvr.write(0);
+		syst.csr.modify(|v| v | 1);
 	}
 
 	// Which line do we want?
@@ -1413,8 +1495,8 @@ fn render_scanline(scan_line_buffer: &mut LineBuffer) -> u32 {
 		let font_ptr = unsafe { font.data.as_ptr().add(font_row) };
 
 		match num_cols {
-			80 => render80cols(row_start, font_ptr, font.height, scan_line_buffer_ptr),
-			40 => render40cols(row_start, font_ptr, font.height, scan_line_buffer_ptr),
+			80 => rendercols2::<80>(row_start, font_ptr, font.height, scan_line_buffer_ptr),
+			40 => rendercols2::<40>(row_start, font_ptr, font.height, scan_line_buffer_ptr),
 			_ => {
 				// Do nothing
 			}
@@ -1423,23 +1505,25 @@ fn render_scanline(scan_line_buffer: &mut LineBuffer) -> u32 {
 
 	scan_line_buffer.mark_rendering_done();
 
-	count
+	0xffffff - syst.cvr.read()
 }
 
 /// Render one line of 80-column text mode
 ///
 /// We bring this out into a function as making the for loop have a fixed range
 /// greatly speeds up the generated code.
-fn render80cols(
+fn rendercols<const N: usize>(
 	row_start: *const GlyphAttr,
 	font_ptr: *const u8,
 	font_height: usize,
-	scan_line_buffer_ptr: *mut RGBColour,
+	scan_line_buffer_ptr: *mut RGBPair,
 ) {
 	let mut pixel_offset = 0;
 
+	let scan_line_buffer_ptr = scan_line_buffer_ptr as *mut RGBColour;
+
 	// Convert from characters to coloured pixels, using the font as a look-up table.
-	for col in 0..80 {
+	for col in 0..N {
 		// Get the 16-bit glyph/attribute pair
 		let glyphattr = unsafe { core::ptr::read(row_start.add(col)) };
 		// Grab just the attribute
@@ -1539,116 +1623,53 @@ fn render80cols(
 	}
 }
 
-/// Render one line of 80-column text mode
+/// Render one line of N-column text mode
 ///
 /// We bring this out into a function as making the for loop have a fixed range
-/// greatly speeds up the generated code.
-fn render40cols(
+/// appears to greatly speed up the generated code.
+fn rendercols2<const N: usize>(
 	row_start: *const GlyphAttr,
 	font_ptr: *const u8,
 	font_height: usize,
-	scan_line_buffer_ptr: *mut RGBColour,
+	scan_line_buffer_ptr: *mut RGBPair,
 ) {
-	let mut pixel_offset = 0;
+	let mut pair_offset = 0;
 
 	// Convert from characters to coloured pixels, using the font as a look-up table.
-	for col in 0..40 {
+	for col in 0..N {
 		// Get the 16-bit glyph/attribute pair
 		let glyphattr = unsafe { core::ptr::read(row_start.add(col)) };
 		// Grab just the attribute
 		let attr = glyphattr.attr();
-		// Note (unsafe): We use pointer arithmetic here because we
-		// can't afford a bounds-check on an array. This is safe
-		// because the fg attribute is a maximum of 15, and the
-		// palette is 256 entries long.
-		let fg_idx = attr.fg();
-		let fg_rgb = unsafe { core::ptr::read(VIDEO_PALETTE.as_ptr().add(fg_idx.0 as usize)) };
-		// Note (unsafe): We use pointer arithmetic here because we
-		// can't afford a bounds-check on an array. This is safe
-		// because the bg attribute is a maximum of 7, and the
-		// palette is 256 entries long.
-		let bg_idx = attr.bg();
-		let bg_rgb = unsafe { core::ptr::read(VIDEO_PALETTE.as_ptr().add(bg_idx.0 as usize)) };
-		// Note (unsafe): We use pointer arithmetic here because we
-		// can't afford a bounds-check on an array. This is safe
-		// because the font is `256 * width` bytes long and we can't
-		// index more than `255 * width` bytes into it.
+		// Where in the font do we need to look up. Note that the `font_ptr`
+		// is already offset for the line (out of 8, or out of 16) that we're
+		// looking at.
 		let glyph_index = (glyphattr.glyph().0 as usize) * font_height;
-		let mono_pixels = unsafe { core::ptr::read(font_ptr.add(glyph_index)) };
 
-		let pixel = if (mono_pixels & 0x80) != 0 {
-			fg_rgb
-		} else {
-			bg_rgb
-		};
+		// Note (unsafe): We use pointer arithmetic here because we can't
+		// afford a bounds-check on an array. This is safe because the font
+		// is `256 * width` bytes long and we can't index more than `255 *
+		// width` bytes into it. We also touch a bunch of static muts, but a
+		// race hazard merely results in a graphical glitch for 1/60th of a
+		// second, so it doesn't matter.
 		unsafe {
-			core::ptr::write(scan_line_buffer_ptr.offset(pixel_offset), pixel);
+			// Grab 0bXXXXXXXX where X=1 means foreground, and X=0 means background
+			let mono_pixels = core::ptr::read(font_ptr.add(glyph_index));
+			// 0bXX------
+			let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels >> 6);
+			core::ptr::write(scan_line_buffer_ptr.offset(pair_offset), pair);
+			// 0b--XX----
+			let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels >> 4);
+			core::ptr::write(scan_line_buffer_ptr.offset(pair_offset + 1), pair);
+			// 0b----XX--
+			let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels >> 2);
+			core::ptr::write(scan_line_buffer_ptr.offset(pair_offset + 2), pair);
+			// 0b------XX
+			let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels);
+			core::ptr::write(scan_line_buffer_ptr.offset(pair_offset + 3), pair);
 		}
 
-		let pixel = if (mono_pixels & 0x40) != 0 {
-			fg_rgb
-		} else {
-			bg_rgb
-		};
-		unsafe {
-			core::ptr::write(scan_line_buffer_ptr.offset(pixel_offset + 1), pixel);
-		}
-
-		let pixel = if (mono_pixels & 0x20) != 0 {
-			fg_rgb
-		} else {
-			bg_rgb
-		};
-		unsafe {
-			core::ptr::write(scan_line_buffer_ptr.offset(pixel_offset + 2), pixel);
-		}
-
-		let pixel = if (mono_pixels & 0x10) != 0 {
-			fg_rgb
-		} else {
-			bg_rgb
-		};
-		unsafe {
-			core::ptr::write(scan_line_buffer_ptr.offset(pixel_offset + 3), pixel);
-		}
-
-		let pixel = if (mono_pixels & 0x08) != 0 {
-			fg_rgb
-		} else {
-			bg_rgb
-		};
-		unsafe {
-			core::ptr::write(scan_line_buffer_ptr.offset(pixel_offset + 4), pixel);
-		}
-
-		let pixel = if (mono_pixels & 0x04) != 0 {
-			fg_rgb
-		} else {
-			bg_rgb
-		};
-		unsafe {
-			core::ptr::write(scan_line_buffer_ptr.offset(pixel_offset + 5), pixel);
-		}
-
-		let pixel = if (mono_pixels & 0x02) != 0 {
-			fg_rgb
-		} else {
-			bg_rgb
-		};
-		unsafe {
-			core::ptr::write(scan_line_buffer_ptr.offset(pixel_offset + 6), pixel);
-		}
-
-		let pixel = if (mono_pixels & 0x01) != 0 {
-			fg_rgb
-		} else {
-			bg_rgb
-		};
-		unsafe {
-			core::ptr::write(scan_line_buffer_ptr.offset(pixel_offset + 7), pixel);
-		}
-
-		pixel_offset += 8;
+		pair_offset += 4;
 	}
 }
 
@@ -1744,7 +1765,7 @@ impl core::fmt::Write for &TextConsole {
 				match ch {
 					'\n' => {
 						// New Line (with implicit carriage return, like UNIX)
-						row = row + 1;
+						row += 1;
 						col = 0;
 					}
 					'\r' => {
@@ -1755,7 +1776,7 @@ impl core::fmt::Write for &TextConsole {
 						let glyph = TextConsole::map_char_to_glyph(ch).unwrap_or(Glyph(b'?'));
 						let glyphattr = GlyphAttr::new(glyph, attr);
 						self.write_at(glyphattr, buffer, row, col, num_cols);
-						col = col + 1;
+						col += 1;
 					}
 				}
 				if col == (num_cols as u8) {

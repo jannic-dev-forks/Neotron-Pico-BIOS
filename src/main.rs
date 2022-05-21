@@ -46,7 +46,7 @@ pub mod vga;
 use common::{video::Attr, video::TextBackgroundColour, video::TextForegroundColour, MemoryRegion};
 use core::fmt::Write;
 use cortex_m_rt::entry;
-use defmt::{debug, info};
+use defmt::info;
 use defmt_rtt as _;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_time::rate::*;
@@ -316,7 +316,7 @@ fn sign_on(delay: &mut cortex_m::delay::Delay) {
 		last_waited_count = waited_count;
 		// Also show how many lines we bungled
 		let cant_play_count = vga::CANT_PLAY_COUNT.load(core::sync::atomic::Ordering::Relaxed);
-		let delta_cant_play_count = (cant_play_count - last_cant_play_count);
+		let delta_cant_play_count = cant_play_count - last_cant_play_count;
 		last_cant_play_count = cant_play_count;
 		write!(
 			&tc,
