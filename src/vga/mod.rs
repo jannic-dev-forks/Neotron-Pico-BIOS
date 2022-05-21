@@ -1119,7 +1119,7 @@ pub fn init(
 	debug!(
 		"Core 1 stack: {:08x}, {} bytes",
 		core1_stack.as_ptr(),
-		core1_stack.len()
+		core::mem::size_of_val(core1_stack)
 	);
 
 	multicore_launch_core1_with_stack(core1_main, core1_stack, ppb, fifo, psm);
