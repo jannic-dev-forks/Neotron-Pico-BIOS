@@ -320,7 +320,7 @@ fn sign_on(delay: &mut cortex_m::delay::Delay) {
 		last_cant_play_count = cant_play_count;
 		write!(
 			&tc,
-			"{} clocks/line spare {} dropped lines              \r",
+			"{} clocks/line {} dropped lines              \r",
 			delta_waited_count, delta_cant_play_count
 		)
 		.unwrap();
