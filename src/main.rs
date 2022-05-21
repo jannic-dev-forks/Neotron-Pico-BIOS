@@ -305,23 +305,23 @@ fn sign_on(delay: &mut cortex_m::delay::Delay) {
 	// 	delay.delay_ms(1000);
 	// }
 
-	let mut last_waited_count = 0;
-	let mut last_cant_play_count = 0;
+	let mut last_render_count = 0;
+	let mut last_clashed_count = 0;
 	loop {
 		// Wait for 1 second (or 60 frames)
 		delay.delay_ms(1000);
 		// We have 480 * 60 lines elapsed. How long on average did we wait per line?
-		let waited_count = vga::RENDER_WAITS_COUNT.load(core::sync::atomic::Ordering::Relaxed);
-		let delta_waited_count = (waited_count - last_waited_count) / (480 * 60);
-		last_waited_count = waited_count;
+		let render_count = vga::RENDER_TIME.load(core::sync::atomic::Ordering::Relaxed);
+		let delta_render_count = (render_count - last_render_count) / (480 * 60);
+		last_render_count = render_count;
 		// Also show how many lines we bungled
-		let cant_play_count = vga::CANT_PLAY_COUNT.load(core::sync::atomic::Ordering::Relaxed);
-		let delta_cant_play_count = cant_play_count - last_cant_play_count;
-		last_cant_play_count = cant_play_count;
+		let clashed_count = vga::CLASHED_COUNT.load(core::sync::atomic::Ordering::Relaxed);
+		let delta_clashed_count = clashed_count - last_clashed_count;
+		last_clashed_count = clashed_count;
 		write!(
 			&tc,
-			"{} clocks/line {} dropped lines              \r",
-			delta_waited_count, delta_cant_play_count
+			"{} clocks/line {} clashed lines              \r",
+			delta_render_count, delta_clashed_count
 		)
 		.unwrap();
 	}

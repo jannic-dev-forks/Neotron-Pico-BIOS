@@ -19,7 +19,7 @@ configurations.
 
 The Neotron Pico offers:
 
-* Dual Cortex-M0+ clocked at 133 MHz
+* Dual Cortex-M0+ clocked at 252 MHz
 * 256 KiB RAM
 * 2048 KiB Flash
 * SD/MMC Slot
@@ -92,7 +92,7 @@ See [CHANGELOG.md](./CHANGELOG.md)
 
 ## Licence
 
-    Neotron-Pico-BIOS Copyright (c) Jonathan 'theJPster' Pallant and the Neotron Developers, 2021
+    Neotron-Pico-BIOS Copyright (c) Jonathan 'theJPster' Pallant and the Neotron Developers, 2022
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by

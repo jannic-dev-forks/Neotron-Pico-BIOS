@@ -238,9 +238,13 @@ static mut PIXEL_DATA_BUFFER_ODD: LineBuffer = LineBuffer {
 	line_number: AtomicU16::new(0),
 };
 
-/// A count of how many lines failed to render in time
-pub static CANT_PLAY_COUNT: AtomicU32 = AtomicU32::new(0);
-pub static RENDER_WAITS_COUNT: AtomicU32 = AtomicU32::new(0);
+/// A count of how many lines were queued for DMA before rendering complete.
+/// This may not result in a glitch, if the rendering completes just ahead of
+/// the beam.
+pub static CLASHED_COUNT: AtomicU32 = AtomicU32::new(0);
+
+/// A record of how many clock cycles were spent in the rendering code on Core 1.
+pub static RENDER_TIME: AtomicU32 = AtomicU32::new(0);
 
 /// Holds the colour look-up table for text mode.
 ///
@@ -1268,8 +1272,8 @@ unsafe extern "C" fn core1_main() -> u32 {
 		let mut waited: u32 = 0;
 		waited += render_scanline(&mut PIXEL_DATA_BUFFER_ODD);
 		waited += render_scanline(&mut PIXEL_DATA_BUFFER_EVEN);
-		RENDER_WAITS_COUNT.store(
-			RENDER_WAITS_COUNT.load(Ordering::Relaxed) + (waited / 2),
+		RENDER_TIME.store(
+			RENDER_TIME.load(Ordering::Relaxed) + (waited / 2),
 			Ordering::Relaxed,
 		);
 	}
@@ -1364,10 +1368,7 @@ pub unsafe fn irq() {
 			// Is the one we're about to play out fully rendered?
 			if !PIXEL_DATA_BUFFER_ODD.is_rendering_done() {
 				// Can't playout line that's still being rendered
-				CANT_PLAY_COUNT.store(
-					CANT_PLAY_COUNT.load(Ordering::Relaxed) + 1,
-					Ordering::Relaxed,
-				);
+				CLASHED_COUNT.store(CLASHED_COUNT.load(Ordering::Relaxed) + 1, Ordering::Relaxed);
 			}
 			// Queue the odd buffer for playout
 			dma.ch[PIXEL_DMA_CHAN]
@@ -1379,10 +1380,7 @@ pub unsafe fn irq() {
 			// Is the one we're about to play out fully rendered?
 			if !PIXEL_DATA_BUFFER_EVEN.is_rendering_done() {
 				// Can't playout line that's still being rendered
-				CANT_PLAY_COUNT.store(
-					CANT_PLAY_COUNT.load(Ordering::Relaxed) + 1,
-					Ordering::Relaxed,
-				);
+				CLASHED_COUNT.store(CLASHED_COUNT.load(Ordering::Relaxed) + 1, Ordering::Relaxed);
 			}
 			// Queue the even buffer for playout
 			dma.ch[PIXEL_DMA_CHAN]
@@ -1436,27 +1434,28 @@ fn render_scanline(scan_line_buffer: &mut LineBuffer) -> u32 {
 	let text_row = current_line_num as usize >> font.height_shift;
 	let font_row = current_line_num as usize & ((1 << font.height_shift) - 1);
 
-	if text_row < num_rows {
-		// Note (unsafe): accessing a static mut, but we do it via a const ptr.
-		let row_start: *const GlyphAttr =
-			unsafe { GLYPH_ATTR_ARRAY.as_ptr().add(text_row * num_cols) };
+	if text_row >= num_rows {
+		return 0;
+	}
 
-		// Get a pointer into our scan-line buffer
-		let scan_line_buffer_ptr = scan_line_buffer.pixels.as_mut_ptr();
+	// Note (unsafe): accessing a static mut, but we do it via a const ptr.
+	let row_start: *const GlyphAttr = unsafe { GLYPH_ATTR_ARRAY.as_ptr().add(text_row * num_cols) };
 
-		// Every font look-up we are about to do for this row will
-		// involve offsetting by the row within each glyph. As this
-		// is the same for every glyph on this row, we calculate a
-		// new pointer once, in advance, and save ourselves an
-		// addition each time around the loop.
-		let font_ptr = unsafe { font.data.as_ptr().add(font_row * 256) };
+	// Get a pointer into our scan-line buffer
+	let scan_line_buffer_ptr = scan_line_buffer.pixels.as_mut_ptr();
 
-		match num_cols {
-			80 => render_scanline_text::<80>(row_start, font_ptr, scan_line_buffer_ptr),
-			40 => render_scanline_text::<40>(row_start, font_ptr, scan_line_buffer_ptr),
-			_ => {
-				// Do nothing
-			}
+	// Every font look-up we are about to do for this row will
+	// involve offsetting by the row within each glyph. As this
+	// is the same for every glyph on this row, we calculate a
+	// new pointer once, in advance, and save ourselves an
+	// addition each time around the loop.
+	let font_ptr = unsafe { font.data.as_ptr().add(font_row * 256) };
+
+	match num_cols {
+		80 => render_scanline_text::<80>(row_start, font_ptr, scan_line_buffer_ptr),
+		40 => render_scanline_text::<40>(row_start, font_ptr, scan_line_buffer_ptr),
+		_ => {
+			// Do nothing
 		}
 	}
 
