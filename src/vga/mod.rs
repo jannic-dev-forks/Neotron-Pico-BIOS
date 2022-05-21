@@ -4,11 +4,8 @@
 //!
 //! It can generate 640x480@60Hz and 640x400@70Hz standard VGA video, with a
 //! 25.2 MHz pixel clock. The spec is 25.175 MHz, so we are 0.1% off). The
-//! assumption is that the CPU is clocked at 126 MHz, i.e. 5x the pixel
+//! assumption is that the CPU is clocked at 252 MHz, i.e. 10x the pixel
 //! clock. All of the PIO code relies on this assumption!
-//!
-//! Currently only an 80x25 two-colour text-mode is supported. Other modes will be
-//! added in the future.
 
 // -----------------------------------------------------------------------------
 // Licence Statement
@@ -53,9 +50,15 @@ use rp_pico::hal::pio::PIOExt;
 // Types
 // -----------------------------------------------------------------------------
 
-/// A font
+/// A font.
+///
+/// A font is always 8 pixels wide, and a power of 2 high. It always has 256
+/// glyphs in it.
 pub struct Font<'a> {
-	height: usize,
+	/// The height of the font is `1 << height_shift`. Makes division faster,
+	/// but it means you can't have a 14px high font.
+	height_shift: u8,
+	/// The font pixels. They are arranged by row, so all the row 0s come first, then all the row 1s, etc.
 	data: &'a [u8],
 }
 
@@ -125,6 +128,12 @@ struct TimingBuffer {
 	back_porch_ends_at: u16,
 }
 
+/// Caches the conversion of two mono pixels into an RGB pixel pair, coloured
+/// with the desired foreground and background colours.
+struct TextColourLookup {
+	entries: [RGBPair; 512],
+}
+
 /// Represents a 12-bit colour value.
 ///
 /// Each channel has four-bits, and they are packed in `GBR` format. This is
@@ -176,7 +185,7 @@ pub static NUM_TEXT_COLS: AtomicUsize = AtomicUsize::new(80);
 /// Current number of visible rows.
 ///
 /// Must be `<= MAX_TEXT_ROWS`
-pub static NUM_TEXT_ROWS: AtomicUsize = AtomicUsize::new(25);
+pub static NUM_TEXT_ROWS: AtomicUsize = AtomicUsize::new(30);
 
 /// Used to signal when Core 1 has started
 static CORE1_START_FLAG: AtomicBool = AtomicBool::new(false);
@@ -233,10 +242,6 @@ static mut PIXEL_DATA_BUFFER_ODD: LineBuffer = LineBuffer {
 pub static CANT_PLAY_COUNT: AtomicU32 = AtomicU32::new(0);
 pub static RENDER_WAITS_COUNT: AtomicU32 = AtomicU32::new(0);
 
-struct TextColourLookup {
-	entries: [RGBPair; 512],
-}
-
 /// Holds the colour look-up table for text mode.
 ///
 /// The input is a 9-bit vlaue comprised of the 4-bit foreground colour index,
@@ -249,52 +254,6 @@ struct TextColourLookup {
 /// +-----+-----+-----+-----+-----+-----+-----+-----+-----+
 /// ```
 static mut TEXT_COLOUR_LOOKUP: TextColourLookup = TextColourLookup::blank();
-
-impl TextColourLookup {
-	const fn blank() -> TextColourLookup {
-		TextColourLookup {
-			entries: [RGBPair(0); 512],
-		}
-	}
-
-	fn init(&mut self, palette: &[RGBColour]) {
-		for (fg, fg_colour) in palette.iter().take(16).enumerate() {
-			for (bg, bg_colour) in palette.iter().take(8).enumerate() {
-				let attr = Attr::new(
-					TextForegroundColour(fg as u8),
-					TextBackgroundColour(bg as u8),
-					false,
-				);
-				for pixels in 0..=3 {
-					let index: usize = (((attr.0 & 0x7F) as usize) << 2) | (pixels & 0x03) as usize;
-					debug!(
-						"fg = {}, bg = {}, px = {:b}, index = {}",
-						fg, bg, pixels, index
-					);
-					let pair = RGBPair::new(
-						if pixels & 0x02 == 0x02 {
-							*fg_colour
-						} else {
-							*bg_colour
-						},
-						if pixels & 0x01 == 0x01 {
-							*fg_colour
-						} else {
-							*bg_colour
-						},
-					);
-					self.entries[index] = pair;
-				}
-			}
-		}
-	}
-
-	#[inline]
-	fn lookup(&self, attr: Attr, pixels: u8) -> RGBPair {
-		let index: usize = (((attr.0 & 0x7F) as usize) << 2) | (pixels & 0x03) as usize;
-		unsafe { core::ptr::read(self.entries.as_ptr().add(index)) }
-	}
-}
 
 /// Holds the 256-entry palette for indexed colour modes.
 static mut VIDEO_PALETTE: [RGBColour; 256] = [
@@ -814,8 +773,7 @@ static mut VIDEO_PALETTE: [RGBColour; 256] = [
 
 /// This is our text buffer.
 ///
-/// This is arranged as `NUM_TEXT_ROWS` rows of `NUM_TEXT_COLS` columns. Each
-/// item is an index into `font16::FONT_DATA` plus an 8-bit attribute.
+/// This is arranged as `NUM_TEXT_ROWS` rows of `NUM_TEXT_COLS` columns.
 ///
 /// Written to by Core 0, and read from by `RenderEngine` running on Core 1.
 pub static mut GLYPH_ATTR_ARRAY: [GlyphAttr; MAX_TEXT_COLS * MAX_TEXT_ROWS] =
@@ -1303,7 +1261,6 @@ pub fn get_num_scan_lines() -> u16 {
 /// # Safety
 ///
 /// Only run this function on Core 1.
-#[link_section = ".data"]
 unsafe extern "C" fn core1_main() -> u32 {
 	CORE1_START_FLAG.store(true, Ordering::Relaxed);
 
@@ -1312,7 +1269,7 @@ unsafe extern "C" fn core1_main() -> u32 {
 		waited += render_scanline(&mut PIXEL_DATA_BUFFER_ODD);
 		waited += render_scanline(&mut PIXEL_DATA_BUFFER_EVEN);
 		RENDER_WAITS_COUNT.store(
-			RENDER_WAITS_COUNT.load(Ordering::Relaxed) + waited / 2,
+			RENDER_WAITS_COUNT.load(Ordering::Relaxed) + (waited / 2),
 			Ordering::Relaxed,
 		);
 	}
@@ -1437,30 +1394,19 @@ pub unsafe fn irq() {
 
 		CURRENT_PLAYOUT_LINE.store(next_playout_line, Ordering::Relaxed);
 	}
+
+	// Wake up both CPUs with an event. This IRQ might not be on the rendering
+	// core.
+	cortex_m::asm::sev();
 }
 
-// Notes:
-//
-// Old rendercol code waited 305 loops, or had 1300 clock cycles spare, or took 2982 clocks/line
-// New rendercol code waited 507 loops, or had 2268 clock cycles spare, or took 2087 clocks/line
-// We have 640 pixels, or 6400 clocks per line.
-
 /// Performs the VGA rendering.
-#[link_section = ".data"]
+///
+/// This routine runs at 2364 clocks/line in 80x30 text mode.
 fn render_scanline(scan_line_buffer: &mut LineBuffer) -> u32 {
-	let font = match unsafe { VIDEO_MODE.format() } {
-		crate::common::video::Format::Text8x16 => &font16::FONT,
-		crate::common::video::Format::Text8x8 => &font8::FONT,
-		_ => {
-			return 0;
-		}
-	};
-
-	let num_rows = NUM_TEXT_ROWS.load(Ordering::Relaxed);
-	let num_cols = NUM_TEXT_COLS.load(Ordering::Relaxed);
-
+	// Wait for this buffer to be ready for us
 	while !scan_line_buffer.is_ready_for_rendering() {
-		// Wait for this buffer to be ready for us
+		cortex_m::asm::wfe();
 	}
 
 	let syst = unsafe { &*cortex_m::peripheral::SYST::ptr() };
@@ -1472,12 +1418,23 @@ fn render_scanline(scan_line_buffer: &mut LineBuffer) -> u32 {
 		syst.csr.modify(|v| v | 1);
 	}
 
+	let font = match unsafe { VIDEO_MODE.format() } {
+		crate::common::video::Format::Text8x16 => &font16::FONT,
+		crate::common::video::Format::Text8x8 => &font8::FONT,
+		_ => {
+			return 0;
+		}
+	};
+
+	let num_rows = NUM_TEXT_ROWS.load(Ordering::Relaxed);
+	let num_cols = NUM_TEXT_COLS.load(Ordering::Relaxed);
+
 	// Which line do we want?
 	let current_line_num = scan_line_buffer.line_number.load(Ordering::SeqCst);
 
 	// Convert our position in scan-lines to a text row, and a line within each glyph on that row
-	let text_row = current_line_num as usize / font.height;
-	let font_row = current_line_num as usize % font.height;
+	let text_row = current_line_num as usize >> font.height_shift;
+	let font_row = current_line_num as usize & ((1 << font.height_shift) - 1);
 
 	if text_row < num_rows {
 		// Note (unsafe): accessing a static mut, but we do it via a const ptr.
@@ -1492,11 +1449,11 @@ fn render_scanline(scan_line_buffer: &mut LineBuffer) -> u32 {
 		// is the same for every glyph on this row, we calculate a
 		// new pointer once, in advance, and save ourselves an
 		// addition each time around the loop.
-		let font_ptr = unsafe { font.data.as_ptr().add(font_row) };
+		let font_ptr = unsafe { font.data.as_ptr().add(font_row * 256) };
 
 		match num_cols {
-			80 => rendercols2::<80>(row_start, font_ptr, font.height, scan_line_buffer_ptr),
-			40 => rendercols2::<40>(row_start, font_ptr, font.height, scan_line_buffer_ptr),
+			80 => render_scanline_text::<80>(row_start, font_ptr, scan_line_buffer_ptr),
+			40 => render_scanline_text::<40>(row_start, font_ptr, scan_line_buffer_ptr),
 			_ => {
 				// Do nothing
 			}
@@ -1508,129 +1465,13 @@ fn render_scanline(scan_line_buffer: &mut LineBuffer) -> u32 {
 	0xffffff - syst.cvr.read()
 }
 
-/// Render one line of 80-column text mode
-///
-/// We bring this out into a function as making the for loop have a fixed range
-/// greatly speeds up the generated code.
-fn rendercols<const N: usize>(
-	row_start: *const GlyphAttr,
-	font_ptr: *const u8,
-	font_height: usize,
-	scan_line_buffer_ptr: *mut RGBPair,
-) {
-	let mut pixel_offset = 0;
-
-	let scan_line_buffer_ptr = scan_line_buffer_ptr as *mut RGBColour;
-
-	// Convert from characters to coloured pixels, using the font as a look-up table.
-	for col in 0..N {
-		// Get the 16-bit glyph/attribute pair
-		let glyphattr = unsafe { core::ptr::read(row_start.add(col)) };
-		// Grab just the attribute
-		let attr = glyphattr.attr();
-		// Note (unsafe): We use pointer arithmetic here because we
-		// can't afford a bounds-check on an array. This is safe
-		// because the fg attribute is a maximum of 15, and the
-		// palette is 256 entries long.
-		let fg_idx = attr.fg();
-		let fg_rgb = unsafe { core::ptr::read(VIDEO_PALETTE.as_ptr().add(fg_idx.0 as usize)) };
-		// Note (unsafe): We use pointer arithmetic here because we
-		// can't afford a bounds-check on an array. This is safe
-		// because the bg attribute is a maximum of 7, and the
-		// palette is 256 entries long.
-		let bg_idx = attr.bg();
-		let bg_rgb = unsafe { core::ptr::read(VIDEO_PALETTE.as_ptr().add(bg_idx.0 as usize)) };
-		// Note (unsafe): We use pointer arithmetic here because we
-		// can't afford a bounds-check on an array. This is safe
-		// because the font is `256 * width` bytes long and we can't
-		// index more than `255 * width` bytes into it.
-		let glyph_index = (glyphattr.glyph().0 as usize) * font_height;
-		let mono_pixels = unsafe { core::ptr::read(font_ptr.add(glyph_index)) };
-
-		let pixel = if (mono_pixels & 0x80) != 0 {
-			fg_rgb
-		} else {
-			bg_rgb
-		};
-		unsafe {
-			core::ptr::write(scan_line_buffer_ptr.offset(pixel_offset), pixel);
-		}
-
-		let pixel = if (mono_pixels & 0x40) != 0 {
-			fg_rgb
-		} else {
-			bg_rgb
-		};
-		unsafe {
-			core::ptr::write(scan_line_buffer_ptr.offset(pixel_offset + 1), pixel);
-		}
-
-		let pixel = if (mono_pixels & 0x20) != 0 {
-			fg_rgb
-		} else {
-			bg_rgb
-		};
-		unsafe {
-			core::ptr::write(scan_line_buffer_ptr.offset(pixel_offset + 2), pixel);
-		}
-
-		let pixel = if (mono_pixels & 0x10) != 0 {
-			fg_rgb
-		} else {
-			bg_rgb
-		};
-		unsafe {
-			core::ptr::write(scan_line_buffer_ptr.offset(pixel_offset + 3), pixel);
-		}
-
-		let pixel = if (mono_pixels & 0x08) != 0 {
-			fg_rgb
-		} else {
-			bg_rgb
-		};
-		unsafe {
-			core::ptr::write(scan_line_buffer_ptr.offset(pixel_offset + 4), pixel);
-		}
-
-		let pixel = if (mono_pixels & 0x04) != 0 {
-			fg_rgb
-		} else {
-			bg_rgb
-		};
-		unsafe {
-			core::ptr::write(scan_line_buffer_ptr.offset(pixel_offset + 5), pixel);
-		}
-
-		let pixel = if (mono_pixels & 0x02) != 0 {
-			fg_rgb
-		} else {
-			bg_rgb
-		};
-		unsafe {
-			core::ptr::write(scan_line_buffer_ptr.offset(pixel_offset + 6), pixel);
-		}
-
-		let pixel = if (mono_pixels & 0x01) != 0 {
-			fg_rgb
-		} else {
-			bg_rgb
-		};
-		unsafe {
-			core::ptr::write(scan_line_buffer_ptr.offset(pixel_offset + 7), pixel);
-		}
-
-		pixel_offset += 8;
-	}
-}
-
 /// Render one line of N-column text mode
 ///
 /// We bring this out into a function as making the for loop have a fixed range
 /// appears to greatly speed up the generated code.
-fn rendercols2<const N: usize>(
+fn render_scanline_text<const N: usize>(
 	row_start: *const GlyphAttr,
 	font_ptr: *const u8,
-	font_height: usize,
 	scan_line_buffer_ptr: *mut RGBPair,
 ) {
 	let mut pair_offset = 0;
@@ -1644,7 +1485,7 @@ fn rendercols2<const N: usize>(
 		// Where in the font do we need to look up. Note that the `font_ptr`
 		// is already offset for the line (out of 8, or out of 16) that we're
 		// looking at.
-		let glyph_index = (glyphattr.glyph().0 as usize) * font_height;
+		let glyph_index = glyphattr.glyph().0 as usize;
 
 		// Note (unsafe): We use pointer arithmetic here because we can't
 		// afford a bounds-check on an array. This is safe because the font
@@ -2033,6 +1874,51 @@ impl TimingBuffer {
 			sync_pulse_ends_at: 479 + 10 + 2,
 			back_porch_ends_at: 479 + 10 + 2 + 33,
 		}
+	}
+}
+
+impl TextColourLookup {
+	/// Make a blank lookup table at start-up.
+	const fn blank() -> TextColourLookup {
+		TextColourLookup {
+			entries: [RGBPair(0); 512],
+		}
+	}
+
+	/// Populate the look-up table with data from the given palette.
+	fn init(&mut self, palette: &[RGBColour]) {
+		for (fg, fg_colour) in palette.iter().take(16).enumerate() {
+			for (bg, bg_colour) in palette.iter().take(8).enumerate() {
+				let attr = Attr::new(
+					TextForegroundColour(fg as u8),
+					TextBackgroundColour(bg as u8),
+					false,
+				);
+				for pixels in 0..=3 {
+					let index: usize = (((attr.0 & 0x7F) as usize) << 2) | (pixels & 0x03) as usize;
+					let pair = RGBPair::new(
+						if pixels & 0x02 == 0x02 {
+							*fg_colour
+						} else {
+							*bg_colour
+						},
+						if pixels & 0x01 == 0x01 {
+							*fg_colour
+						} else {
+							*bg_colour
+						},
+					);
+					self.entries[index] = pair;
+				}
+			}
+		}
+	}
+
+	/// Grab a pixel pair from the look-up table, given a text-mode Attr.
+	#[inline]
+	fn lookup(&self, attr: Attr, pixels: u8) -> RGBPair {
+		let index: usize = (((attr.0 & 0x7F) as usize) << 2) | (pixels & 0x03) as usize;
+		unsafe { core::ptr::read(self.entries.as_ptr().add(index)) }
 	}
 }
 
