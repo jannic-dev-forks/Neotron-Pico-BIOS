@@ -261,518 +261,518 @@ static mut TEXT_COLOUR_LOOKUP: TextColourLookup = TextColourLookup::blank();
 
 /// Holds the 256-entry palette for indexed colour modes.
 static mut VIDEO_PALETTE: [RGBColour; 256] = [
-	// Index 0: #000000
-	RGBColour::new(0x00, 0x00, 0x00),
-	// Index 1: #800000
-	RGBColour::new(0x80, 0x00, 0x00),
-	// Index 2: #008000
-	RGBColour::new(0x00, 0x80, 0x00),
-	// Index 3: #808000
-	RGBColour::new(0x80, 0x80, 0x00),
-	// Index 4: #000080
-	RGBColour::new(0x00, 0x00, 0x80),
-	// Index 5: #800080
-	RGBColour::new(0x80, 0x00, 0x80),
-	// Index 6: #008080
-	RGBColour::new(0x00, 0x80, 0x80),
-	// Index 7: #c0c0c00
-	RGBColour::new(0x0c, 0x0c, 0x00),
-	// Index 8: #808080
-	RGBColour::new(0x80, 0x80, 0x80),
-	// Index 9: #ff00000
-	RGBColour::new(0xf0, 0x00, 0x00),
-	// Index 10: #00ff0000
-	RGBColour::new(0xff, 0x00, 0x00),
-	// Index 11: #ffff000
-	RGBColour::new(0xff, 0xf0, 0x00),
-	// Index 12: #0000ff
-	RGBColour::new(0x00, 0x00, 0xff),
-	// Index 13: #ff00ff
-	RGBColour::new(0xff, 0x00, 0xff),
-	// Index 14: #00ffff
-	RGBColour::new(0x00, 0xff, 0xff),
-	// Index 15: #ffffff
-	RGBColour::new(0xff, 0xff, 0xff),
-	// Index 16: #000000
-	RGBColour::new(0x00, 0x00, 0x00),
-	// Index 17: #00005f
-	RGBColour::new(0x00, 0x00, 0x5f),
-	// Index 18: #000087
-	RGBColour::new(0x00, 0x00, 0x87),
-	// Index 19: #0000af
-	RGBColour::new(0x00, 0x00, 0xaf),
-	// Index 20: #0000d7
-	RGBColour::new(0x00, 0x00, 0xd7),
-	// Index 21: #0000ff
-	RGBColour::new(0x00, 0x00, 0xff),
-	// Index 22: #005f00
-	RGBColour::new(0x00, 0x5f, 0x00),
-	// Index 23: #005f5f
-	RGBColour::new(0x00, 0x5f, 0x5f),
-	// Index 24: #005f87
-	RGBColour::new(0x00, 0x5f, 0x87),
-	// Index 25: #005faf
-	RGBColour::new(0x00, 0x5f, 0xaf),
-	// Index 26: #005fd7
-	RGBColour::new(0x00, 0x5f, 0xd7),
-	// Index 27: #005fff
-	RGBColour::new(0x00, 0x5f, 0xff),
-	// Index 28: #008700
-	RGBColour::new(0x00, 0x87, 0x00),
-	// Index 29: #00875f
-	RGBColour::new(0x00, 0x87, 0x5f),
-	// Index 30: #008787
-	RGBColour::new(0x00, 0x87, 0x87),
-	// Index 31: #0087af
-	RGBColour::new(0x00, 0x87, 0xaf),
-	// Index 32: #0087d7
-	RGBColour::new(0x00, 0x87, 0xd7),
-	// Index 33: #0087ff
-	RGBColour::new(0x00, 0x87, 0xff),
-	// Index 34: #00af00
-	RGBColour::new(0x00, 0xaf, 0x00),
-	// Index 35: #00af5f
-	RGBColour::new(0x00, 0xaf, 0x5f),
-	// Index 36: #00af87
-	RGBColour::new(0x00, 0xaf, 0x87),
-	// Index 37: #00afaf
-	RGBColour::new(0x00, 0xaf, 0xaf),
-	// Index 38: #00afd7
-	RGBColour::new(0x00, 0xaf, 0xd7),
-	// Index 39: #00afff
-	RGBColour::new(0x00, 0xaf, 0xff),
-	// Index 40: #00d700
-	RGBColour::new(0x00, 0xd7, 0x00),
-	// Index 41: #00d75f
-	RGBColour::new(0x00, 0xd7, 0x5f),
-	// Index 42: #00d787
-	RGBColour::new(0x00, 0xd7, 0x87),
-	// Index 43: #00d7af
-	RGBColour::new(0x00, 0xd7, 0xaf),
-	// Index 44: #00d7d7
-	RGBColour::new(0x00, 0xd7, 0xd7),
-	// Index 45: #00d7ff
-	RGBColour::new(0x00, 0xd7, 0xff),
-	// Index 46: #00ff00
-	RGBColour::new(0x00, 0xff, 0x00),
-	// Index 47: #00ff5f
-	RGBColour::new(0x00, 0xff, 0x5f),
-	// Index 48: #00ff87
-	RGBColour::new(0x00, 0xff, 0x87),
-	// Index 49: #00ffaf
-	RGBColour::new(0x00, 0xff, 0xaf),
-	// Index 50: #00ffd7
-	RGBColour::new(0x00, 0xff, 0xd7),
-	// Index 51: #00ffff
-	RGBColour::new(0x00, 0xff, 0xff),
-	// Index 52: #5f0000
-	RGBColour::new(0x5f, 0x00, 0x00),
-	// Index 53: #5f005f
-	RGBColour::new(0x5f, 0x00, 0x5f),
-	// Index 54: #5f0087
-	RGBColour::new(0x5f, 0x00, 0x87),
-	// Index 55: #5f00af
-	RGBColour::new(0x5f, 0x00, 0xaf),
-	// Index 56: #5f00d7
-	RGBColour::new(0x5f, 0x00, 0xd7),
-	// Index 57: #5f00ff
-	RGBColour::new(0x5f, 0x00, 0xff),
-	// Index 58: #5f5f00
-	RGBColour::new(0x5f, 0x5f, 0x00),
-	// Index 59: #5f5f5f
-	RGBColour::new(0x5f, 0x5f, 0x5f),
-	// Index 60: #5f5f87
-	RGBColour::new(0x5f, 0x5f, 0x87),
-	// Index 61: #5f5faf
-	RGBColour::new(0x5f, 0x5f, 0xaf),
-	// Index 62: #5f5fd7
-	RGBColour::new(0x5f, 0x5f, 0xd7),
-	// Index 63: #5f5fff
-	RGBColour::new(0x5f, 0x5f, 0xff),
-	// Index 64: #5f8700
-	RGBColour::new(0x5f, 0x87, 0x00),
-	// Index 65: #5f875f
-	RGBColour::new(0x5f, 0x87, 0x5f),
-	// Index 66: #5f8787
-	RGBColour::new(0x5f, 0x87, 0x87),
-	// Index 67: #5f87af
-	RGBColour::new(0x5f, 0x87, 0xaf),
-	// Index 68: #5f87d7
-	RGBColour::new(0x5f, 0x87, 0xd7),
-	// Index 69: #5f87ff
-	RGBColour::new(0x5f, 0x87, 0xff),
-	// Index 70: #5faf00
-	RGBColour::new(0x5f, 0xaf, 0x00),
-	// Index 71: #5faf5f
-	RGBColour::new(0x5f, 0xaf, 0x5f),
-	// Index 72: #5faf87
-	RGBColour::new(0x5f, 0xaf, 0x87),
-	// Index 73: #5fafaf
-	RGBColour::new(0x5f, 0xaf, 0xaf),
-	// Index 74: #5fafd7
-	RGBColour::new(0x5f, 0xaf, 0xd7),
-	// Index 75: #5fafff
-	RGBColour::new(0x5f, 0xaf, 0xff),
-	// Index 76: #5fd700
-	RGBColour::new(0x5f, 0xd7, 0x00),
-	// Index 77: #5fd75f
-	RGBColour::new(0x5f, 0xd7, 0x5f),
-	// Index 78: #5fd787
-	RGBColour::new(0x5f, 0xd7, 0x87),
-	// Index 79: #5fd7af
-	RGBColour::new(0x5f, 0xd7, 0xaf),
-	// Index 80: #5fd7d7
-	RGBColour::new(0x5f, 0xd7, 0xd7),
-	// Index 81: #5fd7ff
-	RGBColour::new(0x5f, 0xd7, 0xff),
-	// Index 82: #5fff00
-	RGBColour::new(0x5f, 0xff, 0x00),
-	// Index 83: #5fff5f
-	RGBColour::new(0x5f, 0xff, 0x5f),
-	// Index 84: #5fff87
-	RGBColour::new(0x5f, 0xff, 0x87),
-	// Index 85: #5fffaf
-	RGBColour::new(0x5f, 0xff, 0xaf),
-	// Index 86: #5fffd7
-	RGBColour::new(0x5f, 0xff, 0xd7),
-	// Index 87: #5fffff
-	RGBColour::new(0x5f, 0xff, 0xff),
-	// Index 88: #870000
-	RGBColour::new(0x87, 0x00, 0x00),
-	// Index 89: #87005f
-	RGBColour::new(0x87, 0x00, 0x5f),
-	// Index 90: #870087
-	RGBColour::new(0x87, 0x00, 0x87),
-	// Index 91: #8700af
-	RGBColour::new(0x87, 0x00, 0xaf),
-	// Index 92: #8700d7
-	RGBColour::new(0x87, 0x00, 0xd7),
-	// Index 93: #8700ff
-	RGBColour::new(0x87, 0x00, 0xff),
-	// Index 94: #875f00
-	RGBColour::new(0x87, 0x5f, 0x00),
-	// Index 95: #875f5f
-	RGBColour::new(0x87, 0x5f, 0x5f),
-	// Index 96: #875f87
-	RGBColour::new(0x87, 0x5f, 0x87),
-	// Index 97: #875faf
-	RGBColour::new(0x87, 0x5f, 0xaf),
-	// Index 98: #875fd7
-	RGBColour::new(0x87, 0x5f, 0xd7),
-	// Index 99: #875fff
-	RGBColour::new(0x87, 0x5f, 0xff),
-	// Index 100: #878700
-	RGBColour::new(0x87, 0x87, 0x00),
-	// Index 101: #87875f
-	RGBColour::new(0x87, 0x87, 0x5f),
-	// Index 102: #878787
-	RGBColour::new(0x87, 0x87, 0x87),
-	// Index 103: #8787af
-	RGBColour::new(0x87, 0x87, 0xaf),
-	// Index 104: #8787d7
-	RGBColour::new(0x87, 0x87, 0xd7),
-	// Index 105: #8787ff
-	RGBColour::new(0x87, 0x87, 0xff),
-	// Index 106: #87af00
-	RGBColour::new(0x87, 0xaf, 0x00),
-	// Index 107: #87af5f
-	RGBColour::new(0x87, 0xaf, 0x5f),
-	// Index 108: #87af87
-	RGBColour::new(0x87, 0xaf, 0x87),
-	// Index 109: #87afaf
-	RGBColour::new(0x87, 0xaf, 0xaf),
-	// Index 110: #87afd7
-	RGBColour::new(0x87, 0xaf, 0xd7),
-	// Index 111: #87afff
-	RGBColour::new(0x87, 0xaf, 0xff),
-	// Index 112: #87d700
-	RGBColour::new(0x87, 0xd7, 0x00),
-	// Index 113: #87d75f
-	RGBColour::new(0x87, 0xd7, 0x5f),
-	// Index 114: #87d787
-	RGBColour::new(0x87, 0xd7, 0x87),
-	// Index 115: #87d7af
-	RGBColour::new(0x87, 0xd7, 0xaf),
-	// Index 116: #87d7d7
-	RGBColour::new(0x87, 0xd7, 0xd7),
-	// Index 117: #87d7ff
-	RGBColour::new(0x87, 0xd7, 0xff),
-	// Index 118: #87ff00
-	RGBColour::new(0x87, 0xff, 0x00),
-	// Index 119: #87ff5f
-	RGBColour::new(0x87, 0xff, 0x5f),
-	// Index 120: #87ff87
-	RGBColour::new(0x87, 0xff, 0x87),
-	// Index 121: #87ffaf
-	RGBColour::new(0x87, 0xff, 0xaf),
-	// Index 122: #87ffd7
-	RGBColour::new(0x87, 0xff, 0xd7),
-	// Index 123: #87ffff
-	RGBColour::new(0x87, 0xff, 0xff),
-	// Index 124: #af0000
-	RGBColour::new(0xaf, 0x00, 0x00),
-	// Index 125: #af005f
-	RGBColour::new(0xaf, 0x00, 0x5f),
-	// Index 126: #af0087
-	RGBColour::new(0xaf, 0x00, 0x87),
-	// Index 127: #af00af
-	RGBColour::new(0xaf, 0x00, 0xaf),
-	// Index 128: #af00d7
-	RGBColour::new(0xaf, 0x00, 0xd7),
-	// Index 129: #af00ff
-	RGBColour::new(0xaf, 0x00, 0xff),
-	// Index 130: #af5f00
-	RGBColour::new(0xaf, 0x5f, 0x00),
-	// Index 131: #af5f5f
-	RGBColour::new(0xaf, 0x5f, 0x5f),
-	// Index 132: #af5f87
-	RGBColour::new(0xaf, 0x5f, 0x87),
-	// Index 133: #af5faf
-	RGBColour::new(0xaf, 0x5f, 0xaf),
-	// Index 134: #af5fd7
-	RGBColour::new(0xaf, 0x5f, 0xd7),
-	// Index 135: #af5fff
-	RGBColour::new(0xaf, 0x5f, 0xff),
-	// Index 136: #af8700
-	RGBColour::new(0xaf, 0x87, 0x00),
-	// Index 137: #af875f
-	RGBColour::new(0xaf, 0x87, 0x5f),
-	// Index 138: #af8787
-	RGBColour::new(0xaf, 0x87, 0x87),
-	// Index 139: #af87af
-	RGBColour::new(0xaf, 0x87, 0xaf),
-	// Index 140: #af87d7
-	RGBColour::new(0xaf, 0x87, 0xd7),
-	// Index 141: #af87ff
-	RGBColour::new(0xaf, 0x87, 0xff),
-	// Index 142: #afaf00
-	RGBColour::new(0xaf, 0xaf, 0x00),
-	// Index 143: #afaf5f
-	RGBColour::new(0xaf, 0xaf, 0x5f),
-	// Index 144: #afaf87
-	RGBColour::new(0xaf, 0xaf, 0x87),
-	// Index 145: #afafaf
-	RGBColour::new(0xaf, 0xaf, 0xaf),
-	// Index 146: #afafd7
-	RGBColour::new(0xaf, 0xaf, 0xd7),
-	// Index 147: #afafff
-	RGBColour::new(0xaf, 0xaf, 0xff),
-	// Index 148: #afd700
-	RGBColour::new(0xaf, 0xd7, 0x00),
-	// Index 149: #afd75f
-	RGBColour::new(0xaf, 0xd7, 0x5f),
-	// Index 150: #afd787
-	RGBColour::new(0xaf, 0xd7, 0x87),
-	// Index 151: #afd7af
-	RGBColour::new(0xaf, 0xd7, 0xaf),
-	// Index 152: #afd7d7
-	RGBColour::new(0xaf, 0xd7, 0xd7),
-	// Index 153: #afd7ff
-	RGBColour::new(0xaf, 0xd7, 0xff),
-	// Index 154: #afff00
-	RGBColour::new(0xaf, 0xff, 0x00),
-	// Index 155: #afff5f
-	RGBColour::new(0xaf, 0xff, 0x5f),
-	// Index 156: #afff87
-	RGBColour::new(0xaf, 0xff, 0x87),
-	// Index 157: #afffaf
-	RGBColour::new(0xaf, 0xff, 0xaf),
-	// Index 158: #afffd7
-	RGBColour::new(0xaf, 0xff, 0xd7),
-	// Index 159: #afffff
-	RGBColour::new(0xaf, 0xff, 0xff),
-	// Index 160: #d70000
-	RGBColour::new(0xd7, 0x00, 0x00),
-	// Index 161: #d7005f
-	RGBColour::new(0xd7, 0x00, 0x5f),
-	// Index 162: #d70087
-	RGBColour::new(0xd7, 0x00, 0x87),
-	// Index 163: #d700af
-	RGBColour::new(0xd7, 0x00, 0xaf),
-	// Index 164: #d700d7
-	RGBColour::new(0xd7, 0x00, 0xd7),
-	// Index 165: #d700ff
-	RGBColour::new(0xd7, 0x00, 0xff),
-	// Index 166: #d75f00
-	RGBColour::new(0xd7, 0x5f, 0x00),
-	// Index 167: #d75f5f
-	RGBColour::new(0xd7, 0x5f, 0x5f),
-	// Index 168: #d75f87
-	RGBColour::new(0xd7, 0x5f, 0x87),
-	// Index 169: #d75faf
-	RGBColour::new(0xd7, 0x5f, 0xaf),
-	// Index 170: #d75fd7
-	RGBColour::new(0xd7, 0x5f, 0xd7),
-	// Index 171: #d75fff
-	RGBColour::new(0xd7, 0x5f, 0xff),
-	// Index 172: #d78700
-	RGBColour::new(0xd7, 0x87, 0x00),
-	// Index 173: #d7875f
-	RGBColour::new(0xd7, 0x87, 0x5f),
-	// Index 174: #d78787
-	RGBColour::new(0xd7, 0x87, 0x87),
-	// Index 175: #d787af
-	RGBColour::new(0xd7, 0x87, 0xaf),
-	// Index 176: #d787d7
-	RGBColour::new(0xd7, 0x87, 0xd7),
-	// Index 177: #d787ff
-	RGBColour::new(0xd7, 0x87, 0xff),
-	// Index 178: #d7af00
-	RGBColour::new(0xd7, 0xaf, 0x00),
-	// Index 179: #d7af5f
-	RGBColour::new(0xd7, 0xaf, 0x5f),
-	// Index 180: #d7af87
-	RGBColour::new(0xd7, 0xaf, 0x87),
-	// Index 181: #d7afaf
-	RGBColour::new(0xd7, 0xaf, 0xaf),
-	// Index 182: #d7afd7
-	RGBColour::new(0xd7, 0xaf, 0xd7),
-	// Index 183: #d7afff
-	RGBColour::new(0xd7, 0xaf, 0xff),
-	// Index 184: #d7d700
-	RGBColour::new(0xd7, 0xd7, 0x00),
-	// Index 185: #d7d75f
-	RGBColour::new(0xd7, 0xd7, 0x5f),
-	// Index 186: #d7d787
-	RGBColour::new(0xd7, 0xd7, 0x87),
-	// Index 187: #d7d7af
-	RGBColour::new(0xd7, 0xd7, 0xaf),
-	// Index 188: #d7d7d7
-	RGBColour::new(0xd7, 0xd7, 0xd7),
-	// Index 189: #d7d7ff
-	RGBColour::new(0xd7, 0xd7, 0xff),
-	// Index 190: #d7ff00
-	RGBColour::new(0xd7, 0xff, 0x00),
-	// Index 191: #d7ff5f
-	RGBColour::new(0xd7, 0xff, 0x5f),
-	// Index 192: #d7ff87
-	RGBColour::new(0xd7, 0xff, 0x87),
-	// Index 193: #d7ffaf
-	RGBColour::new(0xd7, 0xff, 0xaf),
-	// Index 194: #d7ffd7
-	RGBColour::new(0xd7, 0xff, 0xd7),
-	// Index 195: #d7ffff
-	RGBColour::new(0xd7, 0xff, 0xff),
-	// Index 196: #ff0000
-	RGBColour::new(0xff, 0x00, 0x00),
-	// Index 197: #ff005f
-	RGBColour::new(0xff, 0x00, 0x5f),
-	// Index 198: #ff0087
-	RGBColour::new(0xff, 0x00, 0x87),
-	// Index 199: #ff00af
-	RGBColour::new(0xff, 0x00, 0xaf),
-	// Index 200: #ff00d7
-	RGBColour::new(0xff, 0x00, 0xd7),
-	// Index 201: #ff00ff
-	RGBColour::new(0xff, 0x00, 0xff),
-	// Index 202: #ff5f00
-	RGBColour::new(0xff, 0x5f, 0x00),
-	// Index 203: #ff5f5f
-	RGBColour::new(0xff, 0x5f, 0x5f),
-	// Index 204: #ff5f87
-	RGBColour::new(0xff, 0x5f, 0x87),
-	// Index 205: #ff5faf
-	RGBColour::new(0xff, 0x5f, 0xaf),
-	// Index 206: #ff5fd7
-	RGBColour::new(0xff, 0x5f, 0xd7),
-	// Index 207: #ff5fff
-	RGBColour::new(0xff, 0x5f, 0xff),
-	// Index 208: #ff8700
-	RGBColour::new(0xff, 0x87, 0x00),
-	// Index 209: #ff875f
-	RGBColour::new(0xff, 0x87, 0x5f),
-	// Index 210: #ff8787
-	RGBColour::new(0xff, 0x87, 0x87),
-	// Index 211: #ff87af
-	RGBColour::new(0xff, 0x87, 0xaf),
-	// Index 212: #ff87d7
-	RGBColour::new(0xff, 0x87, 0xd7),
-	// Index 213: #ff87ff
-	RGBColour::new(0xff, 0x87, 0xff),
-	// Index 214: #ffaf00
-	RGBColour::new(0xff, 0xaf, 0x00),
-	// Index 215: #ffaf5f
-	RGBColour::new(0xff, 0xaf, 0x5f),
-	// Index 216: #ffaf87
-	RGBColour::new(0xff, 0xaf, 0x87),
-	// Index 217: #ffafaf
-	RGBColour::new(0xff, 0xaf, 0xaf),
-	// Index 218: #ffafd7
-	RGBColour::new(0xff, 0xaf, 0xd7),
-	// Index 219: #ffafff
-	RGBColour::new(0xff, 0xaf, 0xff),
-	// Index 220: #ffd700
-	RGBColour::new(0xff, 0xd7, 0x00),
-	// Index 221: #ffd75f
-	RGBColour::new(0xff, 0xd7, 0x5f),
-	// Index 222: #ffd787
-	RGBColour::new(0xff, 0xd7, 0x87),
-	// Index 223: #ffd7af
-	RGBColour::new(0xff, 0xd7, 0xaf),
-	// Index 224: #ffd7d7
-	RGBColour::new(0xff, 0xd7, 0xd7),
-	// Index 225: #ffd7ff
-	RGBColour::new(0xff, 0xd7, 0xff),
-	// Index 226: #ffff00
-	RGBColour::new(0xff, 0xff, 0x00),
-	// Index 227: #ffff5f
-	RGBColour::new(0xff, 0xff, 0x5f),
-	// Index 228: #ffff87
-	RGBColour::new(0xff, 0xff, 0x87),
-	// Index 229: #ffffaf
-	RGBColour::new(0xff, 0xff, 0xaf),
-	// Index 230: #ffffd7
-	RGBColour::new(0xff, 0xff, 0xd7),
-	// Index 231: #ffffff
-	RGBColour::new(0xff, 0xff, 0xff),
-	// Index 232: #080808
-	RGBColour::new(0x08, 0x08, 0x08),
-	// Index 233: #121212
-	RGBColour::new(0x12, 0x12, 0x12),
-	// Index 234: #1c1c1c
-	RGBColour::new(0x1c, 0x1c, 0x1c),
-	// Index 235: #262626
-	RGBColour::new(0x26, 0x26, 0x26),
-	// Index 236: #303030
-	RGBColour::new(0x30, 0x30, 0x30),
-	// Index 237: #3a3a3a
-	RGBColour::new(0x3a, 0x3a, 0x3a),
-	// Index 238: #444444
-	RGBColour::new(0x44, 0x44, 0x44),
-	// Index 239: #4e4e4e
-	RGBColour::new(0x4e, 0x4e, 0x4e),
-	// Index 240: #585858
-	RGBColour::new(0x58, 0x58, 0x58),
-	// Index 241: #606060
-	RGBColour::new(0x60, 0x60, 0x60),
-	// Index 242: #666666
-	RGBColour::new(0x66, 0x66, 0x66),
-	// Index 243: #767676
-	RGBColour::new(0x76, 0x76, 0x76),
-	// Index 244: #808080
-	RGBColour::new(0x80, 0x80, 0x80),
-	// Index 245: #8a8a8a
-	RGBColour::new(0x8a, 0x8a, 0x8a),
-	// Index 246: #949494
-	RGBColour::new(0x94, 0x94, 0x94),
-	// Index 247: #9e9e9e
-	RGBColour::new(0x9e, 0x9e, 0x9e),
-	// Index 248: #a8a8a8
-	RGBColour::new(0xa8, 0xa8, 0xa8),
-	// Index 249: #b2b2b2
-	RGBColour::new(0xb2, 0xb2, 0xb2),
-	// Index 250: #bcbcbc
-	RGBColour::new(0xbc, 0xbc, 0xbc),
-	// Index 251: #c6c6c6
-	RGBColour::new(0xc6, 0xc6, 0xc6),
-	// Index 252: #d0d0d0
-	RGBColour::new(0xd0, 0xd0, 0xd0),
-	// Index 253: #dadada
-	RGBColour::new(0xda, 0xda, 0xda),
-	// Index 254: #e4e4e4
-	RGBColour::new(0xe4, 0xe4, 0xe4),
-	// Index 255: #eeeeee
-	RGBColour::new(0xee, 0xee, 0xee),
+	// Index 000: 0x000 (Black)
+	RGBColour::new4(0x0, 0x0, 0x0),
+	// Index 001: 0x800 (Dark Red)
+	RGBColour::new4(0x8, 0x0, 0x0),
+	// Index 002: 0x080 (Dark Green)
+	RGBColour::new4(0x0, 0x8, 0x0),
+	// Index 003: 0x880 (Orange)
+	RGBColour::new4(0x8, 0x8, 0x0),
+	// Index 004: 0x008 (Blue)
+	RGBColour::new4(0x0, 0x0, 0x8),
+	// Index 005: 0x808 (Dark Magenta)
+	RGBColour::new4(0x8, 0x0, 0x8),
+	// Index 006: 0x088 (Dark Cyan)
+	RGBColour::new4(0x0, 0x8, 0x8),
+	// Index 007: 0xcc0 (Yellow)
+	RGBColour::new4(0xc, 0xc, 0x0),
+	// Index 008: 0x888 (Grey)
+	RGBColour::new4(0x8, 0x8, 0x8),
+	// Index 009: 0xf00 (Bright Red)
+	RGBColour::new4(0xf, 0x0, 0x0),
+	// Index 010: 0x0f0 (Bright Green)
+	RGBColour::new4(0x0, 0xf, 0x0),
+	// Index 011: 0xff0 (Bright Yellow)
+	RGBColour::new4(0xf, 0xf, 0x0),
+	// Index 012: 0x00f (Bright Blue)
+	RGBColour::new4(0x0, 0x0, 0xf),
+	// Index 013: 0xf0f (Bright Magenta)
+	RGBColour::new4(0xf, 0x0, 0xf),
+	// Index 014: 0x0ff (Bright Cyan)
+	RGBColour::new4(0x0, 0xf, 0xf),
+	// Index 015: 0xfff (White)
+	RGBColour::new4(0xf, 0xf, 0xf),
+	// Index 016: 0x003
+	RGBColour::new4(0x0, 0x0, 0x3),
+	// Index 017: 0x006
+	RGBColour::new4(0x0, 0x0, 0x6),
+	// Index 018: 0x00c
+	RGBColour::new4(0x0, 0x0, 0xc),
+	// Index 019: 0x020
+	RGBColour::new4(0x0, 0x2, 0x0),
+	// Index 020: 0x023
+	RGBColour::new4(0x0, 0x2, 0x3),
+	// Index 021: 0x026
+	RGBColour::new4(0x0, 0x2, 0x6),
+	// Index 022: 0x028
+	RGBColour::new4(0x0, 0x2, 0x8),
+	// Index 023: 0x02c
+	RGBColour::new4(0x0, 0x2, 0xc),
+	// Index 024: 0x02f
+	RGBColour::new4(0x0, 0x2, 0xf),
+	// Index 025: 0x040
+	RGBColour::new4(0x0, 0x4, 0x0),
+	// Index 026: 0x043
+	RGBColour::new4(0x0, 0x4, 0x3),
+	// Index 027: 0x046
+	RGBColour::new4(0x0, 0x4, 0x6),
+	// Index 028: 0x048
+	RGBColour::new4(0x0, 0x4, 0x8),
+	// Index 029: 0x04c
+	RGBColour::new4(0x0, 0x4, 0xc),
+	// Index 030: 0x04f
+	RGBColour::new4(0x0, 0x4, 0xf),
+	// Index 031: 0x083
+	RGBColour::new4(0x0, 0x8, 0x3),
+	// Index 032: 0x086
+	RGBColour::new4(0x0, 0x8, 0x6),
+	// Index 033: 0x08c
+	RGBColour::new4(0x0, 0x8, 0xc),
+	// Index 034: 0x08f
+	RGBColour::new4(0x0, 0x8, 0xf),
+	// Index 035: 0x0a0
+	RGBColour::new4(0x0, 0xa, 0x0),
+	// Index 036: 0x0a3
+	RGBColour::new4(0x0, 0xa, 0x3),
+	// Index 037: 0x0a6
+	RGBColour::new4(0x0, 0xa, 0x6),
+	// Index 038: 0x0a8
+	RGBColour::new4(0x0, 0xa, 0x8),
+	// Index 039: 0x0ac
+	RGBColour::new4(0x0, 0xa, 0xc),
+	// Index 040: 0x0af
+	RGBColour::new4(0x0, 0xa, 0xf),
+	// Index 041: 0x0e0
+	RGBColour::new4(0x0, 0xe, 0x0),
+	// Index 042: 0x0e3
+	RGBColour::new4(0x0, 0xe, 0x3),
+	// Index 043: 0x0e6
+	RGBColour::new4(0x0, 0xe, 0x6),
+	// Index 044: 0x0e8
+	RGBColour::new4(0x0, 0xe, 0x8),
+	// Index 045: 0x0ec
+	RGBColour::new4(0x0, 0xe, 0xc),
+	// Index 046: 0x0ef
+	RGBColour::new4(0x0, 0xe, 0xf),
+	// Index 047: 0x0f3
+	RGBColour::new4(0x0, 0xf, 0x3),
+	// Index 048: 0x0f6
+	RGBColour::new4(0x0, 0xf, 0x6),
+	// Index 049: 0x0f8
+	RGBColour::new4(0x0, 0xf, 0x8),
+	// Index 050: 0x0fc
+	RGBColour::new4(0x0, 0xf, 0xc),
+	// Index 051: 0x300
+	RGBColour::new4(0x3, 0x0, 0x0),
+	// Index 052: 0x303
+	RGBColour::new4(0x3, 0x0, 0x3),
+	// Index 053: 0x306
+	RGBColour::new4(0x3, 0x0, 0x6),
+	// Index 054: 0x308
+	RGBColour::new4(0x3, 0x0, 0x8),
+	// Index 055: 0x30c
+	RGBColour::new4(0x3, 0x0, 0xc),
+	// Index 056: 0x30f
+	RGBColour::new4(0x3, 0x0, 0xf),
+	// Index 057: 0x320
+	RGBColour::new4(0x3, 0x2, 0x0),
+	// Index 058: 0x323
+	RGBColour::new4(0x3, 0x2, 0x3),
+	// Index 059: 0x326
+	RGBColour::new4(0x3, 0x2, 0x6),
+	// Index 060: 0x328
+	RGBColour::new4(0x3, 0x2, 0x8),
+	// Index 061: 0x32c
+	RGBColour::new4(0x3, 0x2, 0xc),
+	// Index 062: 0x32f
+	RGBColour::new4(0x3, 0x2, 0xf),
+	// Index 063: 0x340
+	RGBColour::new4(0x3, 0x4, 0x0),
+	// Index 064: 0x343
+	RGBColour::new4(0x3, 0x4, 0x3),
+	// Index 065: 0x346
+	RGBColour::new4(0x3, 0x4, 0x6),
+	// Index 066: 0x348
+	RGBColour::new4(0x3, 0x4, 0x8),
+	// Index 067: 0x34c
+	RGBColour::new4(0x3, 0x4, 0xc),
+	// Index 068: 0x34f
+	RGBColour::new4(0x3, 0x4, 0xf),
+	// Index 069: 0x380
+	RGBColour::new4(0x3, 0x8, 0x0),
+	// Index 070: 0x383
+	RGBColour::new4(0x3, 0x8, 0x3),
+	// Index 071: 0x386
+	RGBColour::new4(0x3, 0x8, 0x6),
+	// Index 072: 0x388
+	RGBColour::new4(0x3, 0x8, 0x8),
+	// Index 073: 0x38c
+	RGBColour::new4(0x3, 0x8, 0xc),
+	// Index 074: 0x38f
+	RGBColour::new4(0x3, 0x8, 0xf),
+	// Index 075: 0x3a0
+	RGBColour::new4(0x3, 0xa, 0x0),
+	// Index 076: 0x3a3
+	RGBColour::new4(0x3, 0xa, 0x3),
+	// Index 077: 0x3a6
+	RGBColour::new4(0x3, 0xa, 0x6),
+	// Index 078: 0x3a8
+	RGBColour::new4(0x3, 0xa, 0x8),
+	// Index 079: 0x3ac
+	RGBColour::new4(0x3, 0xa, 0xc),
+	// Index 080: 0x3af
+	RGBColour::new4(0x3, 0xa, 0xf),
+	// Index 081: 0x3e0
+	RGBColour::new4(0x3, 0xe, 0x0),
+	// Index 082: 0x3e3
+	RGBColour::new4(0x3, 0xe, 0x3),
+	// Index 083: 0x3e6
+	RGBColour::new4(0x3, 0xe, 0x6),
+	// Index 084: 0x3e8
+	RGBColour::new4(0x3, 0xe, 0x8),
+	// Index 085: 0x3ec
+	RGBColour::new4(0x3, 0xe, 0xc),
+	// Index 086: 0x3ef
+	RGBColour::new4(0x3, 0xe, 0xf),
+	// Index 087: 0x3f0
+	RGBColour::new4(0x3, 0xf, 0x0),
+	// Index 088: 0x3f3
+	RGBColour::new4(0x3, 0xf, 0x3),
+	// Index 089: 0x3f6
+	RGBColour::new4(0x3, 0xf, 0x6),
+	// Index 090: 0x3f8
+	RGBColour::new4(0x3, 0xf, 0x8),
+	// Index 091: 0x3fc
+	RGBColour::new4(0x3, 0xf, 0xc),
+	// Index 092: 0x3ff
+	RGBColour::new4(0x3, 0xf, 0xf),
+	// Index 093: 0x600
+	RGBColour::new4(0x6, 0x0, 0x0),
+	// Index 094: 0x603
+	RGBColour::new4(0x6, 0x0, 0x3),
+	// Index 095: 0x606
+	RGBColour::new4(0x6, 0x0, 0x6),
+	// Index 096: 0x608
+	RGBColour::new4(0x6, 0x0, 0x8),
+	// Index 097: 0x60c
+	RGBColour::new4(0x6, 0x0, 0xc),
+	// Index 098: 0x60f
+	RGBColour::new4(0x6, 0x0, 0xf),
+	// Index 099: 0x620
+	RGBColour::new4(0x6, 0x2, 0x0),
+	// Index 100: 0x623
+	RGBColour::new4(0x6, 0x2, 0x3),
+	// Index 101: 0x626
+	RGBColour::new4(0x6, 0x2, 0x6),
+	// Index 102: 0x628
+	RGBColour::new4(0x6, 0x2, 0x8),
+	// Index 103: 0x62c
+	RGBColour::new4(0x6, 0x2, 0xc),
+	// Index 104: 0x62f
+	RGBColour::new4(0x6, 0x2, 0xf),
+	// Index 105: 0x640
+	RGBColour::new4(0x6, 0x4, 0x0),
+	// Index 106: 0x643
+	RGBColour::new4(0x6, 0x4, 0x3),
+	// Index 107: 0x646
+	RGBColour::new4(0x6, 0x4, 0x6),
+	// Index 108: 0x648
+	RGBColour::new4(0x6, 0x4, 0x8),
+	// Index 109: 0x64c
+	RGBColour::new4(0x6, 0x4, 0xc),
+	// Index 110: 0x64f
+	RGBColour::new4(0x6, 0x4, 0xf),
+	// Index 111: 0x680
+	RGBColour::new4(0x6, 0x8, 0x0),
+	// Index 112: 0x683
+	RGBColour::new4(0x6, 0x8, 0x3),
+	// Index 113: 0x686
+	RGBColour::new4(0x6, 0x8, 0x6),
+	// Index 114: 0x688
+	RGBColour::new4(0x6, 0x8, 0x8),
+	// Index 115: 0x68c
+	RGBColour::new4(0x6, 0x8, 0xc),
+	// Index 116: 0x68f
+	RGBColour::new4(0x6, 0x8, 0xf),
+	// Index 117: 0x6a0
+	RGBColour::new4(0x6, 0xa, 0x0),
+	// Index 118: 0x6a3
+	RGBColour::new4(0x6, 0xa, 0x3),
+	// Index 119: 0x6a6
+	RGBColour::new4(0x6, 0xa, 0x6),
+	// Index 120: 0x6a8
+	RGBColour::new4(0x6, 0xa, 0x8),
+	// Index 121: 0x6ac
+	RGBColour::new4(0x6, 0xa, 0xc),
+	// Index 122: 0x6af
+	RGBColour::new4(0x6, 0xa, 0xf),
+	// Index 123: 0x6e0
+	RGBColour::new4(0x6, 0xe, 0x0),
+	// Index 124: 0x6e3
+	RGBColour::new4(0x6, 0xe, 0x3),
+	// Index 125: 0x6e6
+	RGBColour::new4(0x6, 0xe, 0x6),
+	// Index 126: 0x6e8
+	RGBColour::new4(0x6, 0xe, 0x8),
+	// Index 127: 0x6ec
+	RGBColour::new4(0x6, 0xe, 0xc),
+	// Index 128: 0x6ef
+	RGBColour::new4(0x6, 0xe, 0xf),
+	// Index 129: 0x6f0
+	RGBColour::new4(0x6, 0xf, 0x0),
+	// Index 130: 0x6f3
+	RGBColour::new4(0x6, 0xf, 0x3),
+	// Index 131: 0x6f6
+	RGBColour::new4(0x6, 0xf, 0x6),
+	// Index 132: 0x6f8
+	RGBColour::new4(0x6, 0xf, 0x8),
+	// Index 133: 0x6fc
+	RGBColour::new4(0x6, 0xf, 0xc),
+	// Index 134: 0x6ff
+	RGBColour::new4(0x6, 0xf, 0xf),
+	// Index 135: 0x803
+	RGBColour::new4(0x8, 0x0, 0x3),
+	// Index 136: 0x806
+	RGBColour::new4(0x8, 0x0, 0x6),
+	// Index 137: 0x80c
+	RGBColour::new4(0x8, 0x0, 0xc),
+	// Index 138: 0x80f
+	RGBColour::new4(0x8, 0x0, 0xf),
+	// Index 139: 0x820
+	RGBColour::new4(0x8, 0x2, 0x0),
+	// Index 140: 0x823
+	RGBColour::new4(0x8, 0x2, 0x3),
+	// Index 141: 0x826
+	RGBColour::new4(0x8, 0x2, 0x6),
+	// Index 142: 0x828
+	RGBColour::new4(0x8, 0x2, 0x8),
+	// Index 143: 0x82c
+	RGBColour::new4(0x8, 0x2, 0xc),
+	// Index 144: 0x82f
+	RGBColour::new4(0x8, 0x2, 0xf),
+	// Index 145: 0x840
+	RGBColour::new4(0x8, 0x4, 0x0),
+	// Index 146: 0x843
+	RGBColour::new4(0x8, 0x4, 0x3),
+	// Index 147: 0x846
+	RGBColour::new4(0x8, 0x4, 0x6),
+	// Index 148: 0x848
+	RGBColour::new4(0x8, 0x4, 0x8),
+	// Index 149: 0x84c
+	RGBColour::new4(0x8, 0x4, 0xc),
+	// Index 150: 0x84f
+	RGBColour::new4(0x8, 0x4, 0xf),
+	// Index 151: 0x883
+	RGBColour::new4(0x8, 0x8, 0x3),
+	// Index 152: 0x886
+	RGBColour::new4(0x8, 0x8, 0x6),
+	// Index 153: 0x88c
+	RGBColour::new4(0x8, 0x8, 0xc),
+	// Index 154: 0x88f
+	RGBColour::new4(0x8, 0x8, 0xf),
+	// Index 155: 0x8a0
+	RGBColour::new4(0x8, 0xa, 0x0),
+	// Index 156: 0x8a3
+	RGBColour::new4(0x8, 0xa, 0x3),
+	// Index 157: 0x8a6
+	RGBColour::new4(0x8, 0xa, 0x6),
+	// Index 158: 0x8a8
+	RGBColour::new4(0x8, 0xa, 0x8),
+	// Index 159: 0x8ac
+	RGBColour::new4(0x8, 0xa, 0xc),
+	// Index 160: 0x8af
+	RGBColour::new4(0x8, 0xa, 0xf),
+	// Index 161: 0x8e0
+	RGBColour::new4(0x8, 0xe, 0x0),
+	// Index 162: 0x8e3
+	RGBColour::new4(0x8, 0xe, 0x3),
+	// Index 163: 0x8e6
+	RGBColour::new4(0x8, 0xe, 0x6),
+	// Index 164: 0x8e8
+	RGBColour::new4(0x8, 0xe, 0x8),
+	// Index 165: 0x8ec
+	RGBColour::new4(0x8, 0xe, 0xc),
+	// Index 166: 0x8ef
+	RGBColour::new4(0x8, 0xe, 0xf),
+	// Index 167: 0x8f0
+	RGBColour::new4(0x8, 0xf, 0x0),
+	// Index 168: 0x8f3
+	RGBColour::new4(0x8, 0xf, 0x3),
+	// Index 169: 0x8f6
+	RGBColour::new4(0x8, 0xf, 0x6),
+	// Index 170: 0x8f8
+	RGBColour::new4(0x8, 0xf, 0x8),
+	// Index 171: 0x8fc
+	RGBColour::new4(0x8, 0xf, 0xc),
+	// Index 172: 0x8ff
+	RGBColour::new4(0x8, 0xf, 0xf),
+	// Index 173: 0xc00
+	RGBColour::new4(0xc, 0x0, 0x0),
+	// Index 174: 0xc03
+	RGBColour::new4(0xc, 0x0, 0x3),
+	// Index 175: 0xc06
+	RGBColour::new4(0xc, 0x0, 0x6),
+	// Index 176: 0xc08
+	RGBColour::new4(0xc, 0x0, 0x8),
+	// Index 177: 0xc0c
+	RGBColour::new4(0xc, 0x0, 0xc),
+	// Index 178: 0xc0f
+	RGBColour::new4(0xc, 0x0, 0xf),
+	// Index 179: 0xc20
+	RGBColour::new4(0xc, 0x2, 0x0),
+	// Index 180: 0xc23
+	RGBColour::new4(0xc, 0x2, 0x3),
+	// Index 181: 0xc26
+	RGBColour::new4(0xc, 0x2, 0x6),
+	// Index 182: 0xc28
+	RGBColour::new4(0xc, 0x2, 0x8),
+	// Index 183: 0xc2c
+	RGBColour::new4(0xc, 0x2, 0xc),
+	// Index 184: 0xc2f
+	RGBColour::new4(0xc, 0x2, 0xf),
+	// Index 185: 0xc40
+	RGBColour::new4(0xc, 0x4, 0x0),
+	// Index 186: 0xc43
+	RGBColour::new4(0xc, 0x4, 0x3),
+	// Index 187: 0xc46
+	RGBColour::new4(0xc, 0x4, 0x6),
+	// Index 188: 0xc48
+	RGBColour::new4(0xc, 0x4, 0x8),
+	// Index 189: 0xc4c
+	RGBColour::new4(0xc, 0x4, 0xc),
+	// Index 190: 0xc4f
+	RGBColour::new4(0xc, 0x4, 0xf),
+	// Index 191: 0xc80
+	RGBColour::new4(0xc, 0x8, 0x0),
+	// Index 192: 0xc83
+	RGBColour::new4(0xc, 0x8, 0x3),
+	// Index 193: 0xc86
+	RGBColour::new4(0xc, 0x8, 0x6),
+	// Index 194: 0xc88
+	RGBColour::new4(0xc, 0x8, 0x8),
+	// Index 195: 0xc8c
+	RGBColour::new4(0xc, 0x8, 0xc),
+	// Index 196: 0xc8f
+	RGBColour::new4(0xc, 0x8, 0xf),
+	// Index 197: 0xca0
+	RGBColour::new4(0xc, 0xa, 0x0),
+	// Index 198: 0xca3
+	RGBColour::new4(0xc, 0xa, 0x3),
+	// Index 199: 0xca6
+	RGBColour::new4(0xc, 0xa, 0x6),
+	// Index 200: 0xca8
+	RGBColour::new4(0xc, 0xa, 0x8),
+	// Index 201: 0xcac
+	RGBColour::new4(0xc, 0xa, 0xc),
+	// Index 202: 0xcaf
+	RGBColour::new4(0xc, 0xa, 0xf),
+	// Index 203: 0xce0
+	RGBColour::new4(0xc, 0xe, 0x0),
+	// Index 204: 0xce3
+	RGBColour::new4(0xc, 0xe, 0x3),
+	// Index 205: 0xce6
+	RGBColour::new4(0xc, 0xe, 0x6),
+	// Index 206: 0xce8
+	RGBColour::new4(0xc, 0xe, 0x8),
+	// Index 207: 0xcec
+	RGBColour::new4(0xc, 0xe, 0xc),
+	// Index 208: 0xcef
+	RGBColour::new4(0xc, 0xe, 0xf),
+	// Index 209: 0xcf0
+	RGBColour::new4(0xc, 0xf, 0x0),
+	// Index 210: 0xcf3
+	RGBColour::new4(0xc, 0xf, 0x3),
+	// Index 211: 0xcf6
+	RGBColour::new4(0xc, 0xf, 0x6),
+	// Index 212: 0xcf8
+	RGBColour::new4(0xc, 0xf, 0x8),
+	// Index 213: 0xcfc
+	RGBColour::new4(0xc, 0xf, 0xc),
+	// Index 214: 0xcff
+	RGBColour::new4(0xc, 0xf, 0xf),
+	// Index 215: 0xf03
+	RGBColour::new4(0xf, 0x0, 0x3),
+	// Index 216: 0xf06
+	RGBColour::new4(0xf, 0x0, 0x6),
+	// Index 217: 0xf08
+	RGBColour::new4(0xf, 0x0, 0x8),
+	// Index 218: 0xf0c
+	RGBColour::new4(0xf, 0x0, 0xc),
+	// Index 219: 0xf20
+	RGBColour::new4(0xf, 0x2, 0x0),
+	// Index 220: 0xf23
+	RGBColour::new4(0xf, 0x2, 0x3),
+	// Index 221: 0xf26
+	RGBColour::new4(0xf, 0x2, 0x6),
+	// Index 222: 0xf28
+	RGBColour::new4(0xf, 0x2, 0x8),
+	// Index 223: 0xf2c
+	RGBColour::new4(0xf, 0x2, 0xc),
+	// Index 224: 0xf2f
+	RGBColour::new4(0xf, 0x2, 0xf),
+	// Index 225: 0xf40
+	RGBColour::new4(0xf, 0x4, 0x0),
+	// Index 226: 0xf43
+	RGBColour::new4(0xf, 0x4, 0x3),
+	// Index 227: 0xf46
+	RGBColour::new4(0xf, 0x4, 0x6),
+	// Index 228: 0xf48
+	RGBColour::new4(0xf, 0x4, 0x8),
+	// Index 229: 0xf4c
+	RGBColour::new4(0xf, 0x4, 0xc),
+	// Index 230: 0xf4f
+	RGBColour::new4(0xf, 0x4, 0xf),
+	// Index 231: 0xf80
+	RGBColour::new4(0xf, 0x8, 0x0),
+	// Index 232: 0xf83
+	RGBColour::new4(0xf, 0x8, 0x3),
+	// Index 233: 0xf86
+	RGBColour::new4(0xf, 0x8, 0x6),
+	// Index 234: 0xf88
+	RGBColour::new4(0xf, 0x8, 0x8),
+	// Index 235: 0xf8c
+	RGBColour::new4(0xf, 0x8, 0xc),
+	// Index 236: 0xf8f
+	RGBColour::new4(0xf, 0x8, 0xf),
+	// Index 237: 0xfa0
+	RGBColour::new4(0xf, 0xa, 0x0),
+	// Index 238: 0xfa3
+	RGBColour::new4(0xf, 0xa, 0x3),
+	// Index 239: 0xfa6
+	RGBColour::new4(0xf, 0xa, 0x6),
+	// Index 240: 0xfa8
+	RGBColour::new4(0xf, 0xa, 0x8),
+	// Index 241: 0xfac
+	RGBColour::new4(0xf, 0xa, 0xc),
+	// Index 242: 0xfaf
+	RGBColour::new4(0xf, 0xa, 0xf),
+	// Index 243: 0xfe0
+	RGBColour::new4(0xf, 0xe, 0x0),
+	// Index 244: 0xfe3
+	RGBColour::new4(0xf, 0xe, 0x3),
+	// Index 245: 0xfe6
+	RGBColour::new4(0xf, 0xe, 0x6),
+	// Index 246: 0xfe8
+	RGBColour::new4(0xf, 0xe, 0x8),
+	// Index 247: 0xfec
+	RGBColour::new4(0xf, 0xe, 0xc),
+	// Index 248: 0xfef
+	RGBColour::new4(0xf, 0xe, 0xf),
+	// Index 249: 0xff3
+	RGBColour::new4(0xf, 0xf, 0x3),
+	// Index 250: 0xff6
+	RGBColour::new4(0xf, 0xf, 0x6),
+	// Index 251: 0xff8
+	RGBColour::new4(0xf, 0xf, 0x8),
+	// Index 252: 0xffc
+	RGBColour::new4(0xf, 0xf, 0xc),
+	// Index 253: 0xbbb
+	RGBColour::new4(0xb, 0xb, 0xb),
+	// Index 254: 0x333
+	RGBColour::new4(0x3, 0x3, 0x3),
+	// Index 255: 0x777
+	RGBColour::new4(0x7, 0x7, 0x7),
 ];
 
 /// This is our text buffer.
@@ -1513,6 +1513,147 @@ fn render_scanline_text<const N: usize>(
 	}
 }
 
+impl<'a> Font<'a> {
+	/// This function performs a glyph look-up based on the Font being Code Page 850.
+	fn convert_char(input: char) -> Option<Glyph> {
+		if input as u32 <= 127 {
+			Some(Glyph(input as u8))
+		} else {
+			match input {
+				'\u{00A0}' => Some(Glyph(255)), // NBSP
+				'\u{00A1}' => Some(Glyph(173)), // ¡
+				'\u{00A2}' => Some(Glyph(189)), // ¢
+				'\u{00A3}' => Some(Glyph(156)), // £
+				'\u{00A4}' => Some(Glyph(207)), // ¤
+				'\u{00A5}' => Some(Glyph(190)), // ¥
+				'\u{00A6}' => Some(Glyph(221)), // ¦
+				'\u{00A7}' => Some(Glyph(245)), // §
+				'\u{00A8}' => Some(Glyph(249)), // ¨
+				'\u{00A9}' => Some(Glyph(184)), // ©
+				'\u{00AA}' => Some(Glyph(166)), // ª
+				'\u{00AB}' => Some(Glyph(174)), // «
+				'\u{00AC}' => Some(Glyph(170)), // ¬
+				'\u{00AD}' => Some(Glyph(240)), // SHY
+				'\u{00AE}' => Some(Glyph(169)), // ®
+				'\u{00AF}' => Some(Glyph(238)), // ¯
+				'\u{00B0}' => Some(Glyph(248)), // °
+				'\u{00B1}' => Some(Glyph(241)), // ±
+				'\u{00B2}' => Some(Glyph(253)), // ²
+				'\u{00B3}' => Some(Glyph(252)), // ³
+				'\u{00B4}' => Some(Glyph(239)), // ´
+				'\u{00B5}' => Some(Glyph(230)), // µ
+				'\u{00B6}' => Some(Glyph(244)), // ¶
+				'\u{00B7}' => Some(Glyph(250)), // ·
+				'\u{00B8}' => Some(Glyph(247)), // ¸
+				'\u{00B9}' => Some(Glyph(251)), // ¹
+				'\u{00BA}' => Some(Glyph(167)), // º
+				'\u{00BB}' => Some(Glyph(175)), // »
+				'\u{00BC}' => Some(Glyph(172)), // ¼
+				'\u{00BD}' => Some(Glyph(171)), // ½
+				'\u{00BE}' => Some(Glyph(243)), // ¾
+				'\u{00BF}' => Some(Glyph(168)), // ¿
+				'\u{00C0}' => Some(Glyph(183)), // À
+				'\u{00C1}' => Some(Glyph(181)), // Á
+				'\u{00C2}' => Some(Glyph(182)), // Â
+				'\u{00C3}' => Some(Glyph(199)), // Ã
+				'\u{00C4}' => Some(Glyph(142)), // Ä
+				'\u{00C5}' => Some(Glyph(143)), // Å
+				'\u{00C6}' => Some(Glyph(146)), // Æ
+				'\u{00C7}' => Some(Glyph(128)), // Ç
+				'\u{00C8}' => Some(Glyph(212)), // È
+				'\u{00C9}' => Some(Glyph(144)), // É
+				'\u{00CA}' => Some(Glyph(210)), // Ê
+				'\u{00CB}' => Some(Glyph(211)), // Ë
+				'\u{00CC}' => Some(Glyph(222)), // Ì
+				'\u{00CD}' => Some(Glyph(214)), // Í
+				'\u{00CE}' => Some(Glyph(215)), // Î
+				'\u{00CF}' => Some(Glyph(216)), // Ï
+				'\u{00D0}' => Some(Glyph(209)), // Ð
+				'\u{00D1}' => Some(Glyph(165)), // Ñ
+				'\u{00D2}' => Some(Glyph(227)), // Ò
+				'\u{00D3}' => Some(Glyph(224)), // Ó
+				'\u{00D4}' => Some(Glyph(226)), // Ô
+				'\u{00D5}' => Some(Glyph(229)), // Õ
+				'\u{00D6}' => Some(Glyph(153)), // Ö
+				'\u{00D7}' => Some(Glyph(158)), // ×
+				'\u{00D8}' => Some(Glyph(157)), // Ø
+				'\u{00D9}' => Some(Glyph(235)), // Ù
+				'\u{00DA}' => Some(Glyph(233)), // Ú
+				'\u{00DB}' => Some(Glyph(234)), // Û
+				'\u{00DC}' => Some(Glyph(154)), // Ü
+				'\u{00DD}' => Some(Glyph(237)), // Ý
+				'\u{00DE}' => Some(Glyph(232)), // Þ
+				'\u{00DF}' => Some(Glyph(225)), // ß
+				'\u{00E0}' => Some(Glyph(133)), // à
+				'\u{00E1}' => Some(Glyph(160)), // á
+				'\u{00E2}' => Some(Glyph(131)), // â
+				'\u{00E3}' => Some(Glyph(198)), // ã
+				'\u{00E4}' => Some(Glyph(132)), // ä
+				'\u{00E5}' => Some(Glyph(134)), // å
+				'\u{00E6}' => Some(Glyph(145)), // æ
+				'\u{00E7}' => Some(Glyph(135)), // ç
+				'\u{00E8}' => Some(Glyph(138)), // è
+				'\u{00E9}' => Some(Glyph(130)), // é
+				'\u{00EA}' => Some(Glyph(136)), // ê
+				'\u{00EB}' => Some(Glyph(137)), // ë
+				'\u{00EC}' => Some(Glyph(141)), // ì
+				'\u{00ED}' => Some(Glyph(161)), // í
+				'\u{00EE}' => Some(Glyph(140)), // î
+				'\u{00EF}' => Some(Glyph(139)), // ï
+				'\u{00F0}' => Some(Glyph(208)), // ð
+				'\u{00F1}' => Some(Glyph(164)), // ñ
+				'\u{00F2}' => Some(Glyph(149)), // ò
+				'\u{00F3}' => Some(Glyph(162)), // ó
+				'\u{00F4}' => Some(Glyph(147)), // ô
+				'\u{00F5}' => Some(Glyph(228)), // õ
+				'\u{00F6}' => Some(Glyph(148)), // ö
+				'\u{00F7}' => Some(Glyph(246)), // ÷
+				'\u{00F8}' => Some(Glyph(155)), // ø
+				'\u{00F9}' => Some(Glyph(151)), // ù
+				'\u{00FA}' => Some(Glyph(163)), // ú
+				'\u{00FB}' => Some(Glyph(150)), // û
+				'\u{00FC}' => Some(Glyph(129)), // ü
+				'\u{00FD}' => Some(Glyph(236)), // ý
+				'\u{00FE}' => Some(Glyph(231)), // þ
+				'\u{00FF}' => Some(Glyph(152)), // ÿ
+				'\u{0131}' => Some(Glyph(213)), // ı
+				'\u{0192}' => Some(Glyph(159)), // ƒ
+				'\u{2017}' => Some(Glyph(242)), // ‗
+				'\u{2500}' => Some(Glyph(196)), // ─
+				'\u{2502}' => Some(Glyph(179)), // │
+				'\u{250C}' => Some(Glyph(218)), // ┌
+				'\u{2510}' => Some(Glyph(191)), // ┐
+				'\u{2514}' => Some(Glyph(192)), // └
+				'\u{2518}' => Some(Glyph(217)), // ┘
+				'\u{251C}' => Some(Glyph(195)), // ├
+				'\u{2524}' => Some(Glyph(180)), // ┤
+				'\u{252C}' => Some(Glyph(194)), // ┬
+				'\u{2534}' => Some(Glyph(193)), // ┴
+				'\u{253C}' => Some(Glyph(197)), // ┼
+				'\u{2550}' => Some(Glyph(205)), // ═
+				'\u{2551}' => Some(Glyph(186)), // ║
+				'\u{2554}' => Some(Glyph(201)), // ╔
+				'\u{2557}' => Some(Glyph(187)), // ╗
+				'\u{255A}' => Some(Glyph(200)), // ╚
+				'\u{255D}' => Some(Glyph(188)), // ╝
+				'\u{2560}' => Some(Glyph(204)), // ╠
+				'\u{2563}' => Some(Glyph(185)), // ╣
+				'\u{2566}' => Some(Glyph(203)), // ╦
+				'\u{2569}' => Some(Glyph(202)), // ╩
+				'\u{256C}' => Some(Glyph(206)), // ╬
+				'\u{2580}' => Some(Glyph(223)), // ▀
+				'\u{2584}' => Some(Glyph(220)), // ▄
+				'\u{2588}' => Some(Glyph(219)), // █
+				'\u{2591}' => Some(Glyph(176)), // ░
+				'\u{2592}' => Some(Glyph(177)), // ▒
+				'\u{2593}' => Some(Glyph(178)), // ▓
+				'\u{25A0}' => Some(Glyph(254)), // ■
+				_ => None,
+			}
+		}
+	}
+}
+
 impl TextConsole {
 	/// Create a TextConsole.
 	///
@@ -1523,7 +1664,12 @@ impl TextConsole {
 			current_col: AtomicU8::new(0),
 			text_buffer: AtomicPtr::new(core::ptr::null_mut()),
 			attr: AtomicU8::new(
-				Attr::new(TextForegroundColour(15), TextBackgroundColour(0), false).as_u8(),
+				Attr::new(
+					TextForegroundColour::WHITE,
+					TextBackgroundColour::BLACK,
+					false,
+				)
+				.as_u8(),
 			),
 		}
 	}
@@ -1613,7 +1759,7 @@ impl core::fmt::Write for &TextConsole {
 						col = 0;
 					}
 					_ => {
-						let glyph = TextConsole::map_char_to_glyph(ch).unwrap_or(Glyph(b'?'));
+						let glyph = Font::convert_char(ch).unwrap_or(Glyph(b'?'));
 						let glyphattr = GlyphAttr::new(glyph, attr);
 						self.write_at(glyphattr, buffer, row, col, num_cols);
 						col += 1;
@@ -1889,8 +2035,8 @@ impl TextColourLookup {
 		for (fg, fg_colour) in palette.iter().take(16).enumerate() {
 			for (bg, bg_colour) in palette.iter().take(8).enumerate() {
 				let attr = Attr::new(
-					TextForegroundColour(fg as u8),
-					TextBackgroundColour(bg as u8),
+					unsafe { TextForegroundColour::new_unchecked(fg as u8) },
+					unsafe { TextBackgroundColour::new_unchecked(bg as u8) },
 					false,
 				);
 				for pixels in 0..=3 {
@@ -1913,7 +2059,9 @@ impl TextColourLookup {
 		}
 	}
 
-	/// Grab a pixel pair from the look-up table, given a text-mode Attr.
+	/// Grab a pixel pair from the look-up table, given a text-mode `Attr`.
+	///
+	/// Only looks at the bottom two bits of `pixels`.
 	#[inline]
 	fn lookup(&self, attr: Attr, pixels: u8) -> RGBPair {
 		let index: usize = (((attr.0 & 0x7F) as usize) << 2) | (pixels & 0x03) as usize;
@@ -1923,15 +2071,24 @@ impl TextColourLookup {
 
 impl RGBColour {
 	/// Make a 12-bit RGB Colour from 8-bit red, green and blue values.
-	pub const fn new(red: u8, green: u8, blue: u8) -> RGBColour {
+	pub const fn new8(red: u8, green: u8, blue: u8) -> RGBColour {
 		let red = (red >> 4) as u16;
 		let green = (green >> 4) as u16;
 		let blue = (blue >> 4) as u16;
 		RGBColour((blue << 8) | (green << 4) | red)
 	}
+
+	/// Make a 12-bit RGB Colour from 3-bit red, green and blue values.
+	pub const fn new4(red: u8, green: u8, blue: u8) -> RGBColour {
+		let red = (red & 0x0F) as u16;
+		let green = (green & 0x0F) as u16;
+		let blue = (blue & 0x0F) as u16;
+		RGBColour((blue << 8) | (green << 4) | red)
+	}
 }
 
 impl RGBPair {
+	/// Make a new RGB Pair from two RGB Colours.
 	pub const fn new(first: RGBColour, second: RGBColour) -> RGBPair {
 		let first: u32 = first.0 as u32;
 		let second: u32 = second.0 as u32;

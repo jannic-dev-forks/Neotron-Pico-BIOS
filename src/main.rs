@@ -46,7 +46,7 @@ pub mod vga;
 use common::{video::Attr, video::TextBackgroundColour, video::TextForegroundColour, MemoryRegion};
 use core::fmt::Write;
 use cortex_m_rt::entry;
-use defmt::info;
+use defmt::{debug, info};
 use defmt_rtt as _;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_time::rate::*;
@@ -65,7 +65,10 @@ use rp_pico::{
 // Types
 // -----------------------------------------------------------------------------
 
-// None
+/// All the things the BIOS callbacks need to do their job.
+struct Context {
+	delay: cortex_m::delay::Delay,
+}
 
 // -----------------------------------------------------------------------------
 // Static and Const Data
@@ -127,10 +130,25 @@ static BIOS_API: common::Api = common::Api {
 	delay,
 };
 
+/// Holds the contextual data we require to operate the callbacks (which don't get a `&self` or similar).
+///
+/// Has to be an `Option` as we have no boot-time initialisation for static variables.
+///
+/// Ideally would not be an unsafe `static mut` but instead some kind of `Cell` with run-time checking.
+static mut CONTEXT: Option<Context> = None;
+
 extern "C" {
+	/// Linker symbol giving the start of the `FLASH_OS` region. This is where we find the start of the Neotron OS.
 	static mut _flash_os_start: u32;
+	/// Linker symbol giving the size of the `FLASH_OS` region, in bytes.
+	///
+	/// Take the address of this symbol to get the size value you require.
 	static mut _flash_os_len: u32;
+	/// Linker symbol giving the start of the `RAM_OS` region. This is where we set up RAM for Neotron OS.
 	static mut _ram_os_start: u32;
+	/// Linker symbol giving the size of the `RAM_OS` region, in bytes.
+	///
+	/// Take the address of this symbol to get the size value you require.
 	static mut _ram_os_len: u32;
 }
 
@@ -250,64 +268,184 @@ fn main() -> ! {
 	let mut delay = cortex_m::delay::Delay::new(cp.SYST, clocks.system_clock.freq().integer());
 	sign_on(&mut delay);
 
-	// Now jump to the OS
-	// let code: &common::OsStartFn = unsafe { ::core::mem::transmute(&_flash_os_start) };
-	// code(&BIOS_API);
+	unsafe {
+		CONTEXT = Some(Context { delay });
+	}
 
-	loop {}
+	info!("Jumping to OS!");
+
+	// Now jump to the OS. We are assuming the first four bytes of OS Flash are the address of the OS start function.
+	let code: &common::OsStartFn = unsafe { ::core::mem::transmute(&_flash_os_start) };
+	code(&BIOS_API);
 }
 
+/// Tell people about the BIOS, using the VGA output.
 fn sign_on(delay: &mut cortex_m::delay::Delay) {
 	static LICENCE_TEXT: &str = "\
         Copyright © Jonathan 'theJPster' Pallant and the Neotron Developers, 2022\n\
-		Licenced under the GNU GPL v3, or later.\n";
+		Licenced under the GNU GPL v3, or later.";
+	static LOGO_TEXT: &str = "\
+		Neotron \\FB\\B1 This is Yellow on Red \\FF\\B0 This is normal again.\n\
+		Neotron \\FF\\B4 This is White on Blue \\FF\\B0 This is normal again.\n\
+		";
 
 	// Create a new temporary console for some boot-up messages
 	let tc = vga::TextConsole::new();
 	tc.set_text_buffer(unsafe { &mut vga::GLYPH_ATTR_ARRAY });
 
 	// A crude way to clear the screen
-	for _col in 0..vga::MAX_TEXT_ROWS {
+	for _row in 0..vga::MAX_TEXT_ROWS {
 		writeln!(&tc).unwrap();
 	}
-
 	tc.move_to(0, 0);
 
-	for fg in 0..=15 {
-		tc.set_attribute(Attr::new(
-			TextForegroundColour(15),
-			TextBackgroundColour(0),
-			false,
-		));
-		write!(&tc, "FG {:02}: ", fg).unwrap();
-		for bg in 0..=7 {
-			tc.set_attribute(Attr::new(
-				TextForegroundColour(fg),
-				TextBackgroundColour(bg),
-				false,
-			));
-			write!(&tc, " {:02} ", bg).unwrap();
-		}
-		writeln!(&tc).unwrap();
+	#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+	enum Escape {
+		None,
+		Slash,
+		Fore,
+		Back,
 	}
+
+	let mut attr = Attr::new(
+		TextForegroundColour::WHITE,
+		TextBackgroundColour::BLACK,
+		false,
+	);
+	let mut escape = Escape::None;
+	for ch in LOGO_TEXT.chars() {
+		match (escape, ch) {
+			(Escape::Fore, '0') => {
+				attr.set_fg(TextForegroundColour::BLACK);
+				escape = Escape::None;
+			}
+			(Escape::Fore, '1') => {
+				attr.set_fg(TextForegroundColour::DARK_RED);
+				escape = Escape::None;
+			}
+			(Escape::Fore, '2') => {
+				attr.set_fg(TextForegroundColour::DARK_GREEN);
+				escape = Escape::None;
+			}
+			(Escape::Fore, '3') => {
+				attr.set_fg(TextForegroundColour::ORANGE);
+				escape = Escape::None;
+			}
+			(Escape::Fore, '4') => {
+				attr.set_fg(TextForegroundColour::BLUE);
+				escape = Escape::None;
+			}
+			(Escape::Fore, '5') => {
+				attr.set_fg(TextForegroundColour::DARK_MAGENTA);
+				escape = Escape::None;
+			}
+			(Escape::Fore, '6') => {
+				attr.set_fg(TextForegroundColour::DARK_CYAN);
+				escape = Escape::None;
+			}
+			(Escape::Fore, '7') => {
+				attr.set_fg(TextForegroundColour::YELLOW);
+				escape = Escape::None;
+			}
+			(Escape::Fore, '8') => {
+				attr.set_fg(TextForegroundColour::GREY);
+				escape = Escape::None;
+			}
+			(Escape::Fore, '9') => {
+				attr.set_fg(TextForegroundColour::BRIGHT_RED);
+				escape = Escape::None;
+			}
+			(Escape::Fore, 'a' | 'A') => {
+				attr.set_fg(TextForegroundColour::BRIGHT_GREEN);
+				escape = Escape::None;
+			}
+			(Escape::Fore, 'b' | 'B') => {
+				attr.set_fg(TextForegroundColour::BRIGHT_YELLOW);
+				escape = Escape::None;
+			}
+			(Escape::Fore, 'c' | 'C') => {
+				attr.set_fg(TextForegroundColour::BRIGHT_BLUE);
+				escape = Escape::None;
+			}
+			(Escape::Fore, 'd' | 'D') => {
+				attr.set_fg(TextForegroundColour::BRIGHT_MAGENTA);
+				escape = Escape::None;
+			}
+			(Escape::Fore, 'e' | 'E') => {
+				attr.set_fg(TextForegroundColour::BRIGHT_CYAN);
+				escape = Escape::None;
+			}
+			(Escape::Fore, 'f' | 'F') => {
+				attr.set_fg(TextForegroundColour::WHITE);
+				escape = Escape::None;
+			}
+			(Escape::Back, '0') => {
+				attr.set_bg(TextBackgroundColour::BLACK);
+				escape = Escape::None;
+			}
+			(Escape::Back, '1') => {
+				attr.set_bg(TextBackgroundColour::DARK_RED);
+				escape = Escape::None;
+			}
+			(Escape::Back, '2') => {
+				attr.set_bg(TextBackgroundColour::DARK_GREEN);
+				escape = Escape::None;
+			}
+			(Escape::Back, '3') => {
+				attr.set_bg(TextBackgroundColour::ORANGE);
+				escape = Escape::None;
+			}
+			(Escape::Back, '4') => {
+				attr.set_bg(TextBackgroundColour::BLUE);
+				escape = Escape::None;
+			}
+			(Escape::Back, '5') => {
+				attr.set_bg(TextBackgroundColour::DARK_MAGENTA);
+				escape = Escape::None;
+			}
+			(Escape::Back, '6') => {
+				attr.set_bg(TextBackgroundColour::DARK_CYAN);
+				escape = Escape::None;
+			}
+			(Escape::Back, '7') => {
+				attr.set_bg(TextBackgroundColour::YELLOW);
+				escape = Escape::None;
+			}
+			(Escape::None, '\\') => {
+				escape = Escape::Slash;
+			}
+			(Escape::Slash, 'F') => {
+				escape = Escape::Fore;
+			}
+			(Escape::Slash, 'B') => {
+				escape = Escape::Back;
+			}
+			(Escape::None, _) => {
+				write!(&tc, "{}", ch).unwrap();
+			}
+			_ => {
+				defmt::panic!("Bad format {} {}", escape as u32, ch);
+			}
+		}
+		tc.set_attribute(attr);
+	}
+
+	// Set up for bright white on black.
 	tc.set_attribute(Attr::new(
-		TextForegroundColour(15),
-		TextBackgroundColour(0),
+		TextForegroundColour::WHITE,
+		TextBackgroundColour::BLACK,
 		false,
 	));
 
+	// Print the version, skipping the NUL byte at the end.
 	writeln!(&tc, "{}", &BIOS_VERSION[0..BIOS_VERSION.len() - 1]).unwrap();
-	write!(&tc, "{}", LICENCE_TEXT).unwrap();
+	// Print the licence text
+	writeln!(&tc, "{}", LICENCE_TEXT).unwrap();
 
-	// Wait for a bit so you can read the licence.
-	// for n in [5, 4, 3, 2, 1].iter() {
-	// 	write!(&tc, "{}...", n).unwrap();
-	// 	delay.delay_ms(1000);
-	// }
-
+	// Dump some stats about render times to the screen
 	let mut last_render_count = 0;
 	let mut last_clashed_count = 0;
-	loop {
+	for i in 0..10 {
 		// Wait for 1 second (or 60 frames)
 		delay.delay_ms(1000);
 		// We have 480 * 60 lines elapsed. How long on average did we wait per line?
@@ -320,8 +458,8 @@ fn sign_on(delay: &mut cortex_m::delay::Delay) {
 		last_clashed_count = clashed_count;
 		write!(
 			&tc,
-			"{} clocks/line {} clashed lines              \r",
-			delta_render_count, delta_clashed_count
+			"{} {} clocks/line {} clashed lines              \r",
+			i, delta_render_count, delta_clashed_count
 		)
 		.unwrap();
 	}
@@ -467,6 +605,7 @@ pub extern "C" fn video_is_valid_mode(mode: common::video::Mode) -> bool {
 /// pointer to a block of size `Mode::frame_size_bytes()` to
 /// `video_set_framebuffer` before any video will appear.
 pub extern "C" fn video_set_mode(mode: common::video::Mode) -> common::Result<()> {
+	debug!("video_set_mode({})", mode.as_u8());
 	// if vga::set_video_mode(mode) {
 	common::Result::Ok(())
 	// } else {
@@ -604,12 +743,12 @@ pub extern "C" fn video_wait_for_line(line: u16) {
 }
 
 extern "C" fn video_get_palette(index: u8) -> common::Option<common::video::RGBColour> {
-	// debug!("video_get_palette({})", index);
+	debug!("video_get_palette({})", index);
 	unimplemented!();
 }
 
 extern "C" fn video_set_palette(index: u8, rgb: common::video::RGBColour) {
-	// debug!("video_set_palette({}, #{:06x})", index, rgb.as_packed());
+	debug!("video_set_palette({}, #{:06x})", index, rgb.as_packed());
 	unimplemented!();
 }
 
@@ -617,7 +756,7 @@ unsafe extern "C" fn video_set_whole_palette(
 	palette: *const common::video::RGBColour,
 	length: usize,
 ) {
-	// debug!("video_set_whole_palette({:x}, {})", palette, length);
+	debug!("video_set_whole_palette({:x}, {})", palette, length);
 	unimplemented!();
 }
 
@@ -632,7 +771,7 @@ extern "C" fn video_convert_character(character: u32) -> common::Option<u8> {
 }
 
 extern "C" fn i2c_bus_get_info(_i2c_bus: u8) -> common::Option<common::i2c::BusInfo> {
-	// debug!("i2c_bus_get_info");
+	debug!("i2c_bus_get_info");
 	unimplemented!();
 }
 
@@ -643,69 +782,69 @@ extern "C" fn i2c_write_read(
 	_tx2: common::ApiByteSlice,
 	_rx: common::ApiBuffer,
 ) -> common::Result<()> {
-	// debug!("i2c_write_read");
+	debug!("i2c_write_read");
 	unimplemented!();
 }
 
 extern "C" fn audio_mixer_channel_get_info(
 	_audio_mixer_id: u8,
 ) -> common::Result<common::audio::MixerChannelInfo> {
-	// debug!("audio_mixer_channel_get_info");
+	debug!("audio_mixer_channel_get_info");
 	unimplemented!();
 }
 
 extern "C" fn audio_mixer_channel_set_level(_audio_mixer_id: u8, _level: u8) -> common::Result<()> {
-	// debug!("audio_mixer_channel_set_level");
+	debug!("audio_mixer_channel_set_level");
 	unimplemented!();
 }
 
 extern "C" fn audio_output_set_config(_config: common::audio::Config) -> common::Result<()> {
-	// debug!("audio_output_set_config");
+	debug!("audio_output_set_config");
 	unimplemented!();
 }
 
 extern "C" fn audio_output_get_config() -> common::Result<common::audio::Config> {
-	// debug!("audio_output_get_config");
+	debug!("audio_output_get_config");
 	unimplemented!();
 }
 
 unsafe extern "C" fn audio_output_data(_samples: common::ApiByteSlice) -> common::Result<usize> {
-	// debug!("audio_output_data");
+	debug!("audio_output_data");
 	unimplemented!();
 }
 
 extern "C" fn audio_output_get_space() -> common::Result<usize> {
-	// debug!("audio_output_get_space");
+	debug!("audio_output_get_space");
 	unimplemented!();
 }
 
 extern "C" fn audio_input_set_config(_config: common::audio::Config) -> common::Result<()> {
-	// debug!("audio_input_set_config");
+	debug!("audio_input_set_config");
 	unimplemented!();
 }
 
 extern "C" fn audio_input_get_config() -> common::Result<common::audio::Config> {
-	// debug!("audio_input_get_config");
+	debug!("audio_input_get_config");
 	unimplemented!();
 }
 
 extern "C" fn audio_input_data(_samples: common::ApiBuffer) -> common::Result<usize> {
-	// debug!("audio_input_data");
+	debug!("audio_input_data");
 	unimplemented!();
 }
 
 extern "C" fn audio_input_get_count() -> common::Result<usize> {
-	// debug!("audio_input_get_count");
+	debug!("audio_input_get_count");
 	unimplemented!();
 }
 
 extern "C" fn bus_select(_periperal_id: common::Option<u8>) {
-	// debug!("bus_select");
+	debug!("bus_select");
 	unimplemented!();
 }
 
 extern "C" fn bus_get_info(_periperal_id: u8) -> common::Option<common::bus::PeripheralInfo> {
-	// debug!("bus_get_info");
+	debug!("bus_get_info");
 	unimplemented!();
 }
 
@@ -714,18 +853,20 @@ extern "C" fn bus_write_read(
 	_tx2: common::ApiByteSlice,
 	_rx: common::ApiBuffer,
 ) -> common::Result<()> {
-	// debug!("bus_write_read");
+	debug!("bus_write_read");
 	unimplemented!();
 }
 
 extern "C" fn bus_exchange(_buffer: common::ApiBuffer) -> common::Result<()> {
-	// debug!("bus_exchange");
+	debug!("bus_exchange");
 	unimplemented!();
 }
 
 extern "C" fn delay(timeout: common::Timeout) {
-	// debug!("delay({} ms)", timeout.get_ms());
-	// TODO!
+	debug!("delay({} ms)", timeout.get_ms());
+	if let Some(ctx) = unsafe { CONTEXT.as_mut() } {
+		ctx.delay.delay_ms(timeout.get_ms());
+	}
 }
 
 /// Called when DMA raises IRQ0; i.e. when a DMA transfer to the pixel FIFO or

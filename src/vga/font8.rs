@@ -31,7 +31,7 @@
 //! OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 //! SUCH DAMAGE.
 
-/// An 8x16 font
+/// An 8x16 font, in Code Page 850.
 pub static FONT: super::Font = super::Font {
 	height_shift: 3,
 	data: &unformatted::DATA,

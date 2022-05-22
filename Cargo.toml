@@ -59,6 +59,7 @@ test = false
 codegen-units = 1
 # symbols are nice and they don't increase the size on Flash
 debug = true
-# better optimizations
+# better optimizations - "s" is faster than 3.
+# 2308 clocks/line vs 2642 clocks/line
 lto = true
-opt-level = 3
+opt-level = "s"
