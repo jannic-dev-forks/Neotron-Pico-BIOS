@@ -78,7 +78,7 @@ use rp_pico::{
 	hal::{
 		self,
 		clocks::ClocksManager,
-		gpio::{bank0, Function, Input, Output, Pin, PullUp, PushPull},
+		gpio::{bank0, Function, Pin, PullUp, FunctionSioInput, FunctionI2C, self, PullNone, FunctionPio0, FunctionSioOutput, FunctionPio1},
 		pac::{self, interrupt},
 		Clock,
 	},
@@ -102,11 +102,11 @@ use neotron_common_bios as common;
 type Duration = fugit::Duration<u64, 1, 1_000_000>;
 
 /// The type of our IRQ input pin from the MCP23S17.
-type IrqPin = Pin<bank0::Gpio20, Input<PullUp>>;
+type IrqPin = Pin<bank0::Gpio20, FunctionSioInput, PullUp>;
 
 type I2cPins = (
-	Pin<bank0::Gpio14, Function<hal::gpio::I2C>>,
-	Pin<bank0::Gpio15, Function<hal::gpio::I2C>>,
+	Pin<bank0::Gpio14, FunctionI2C, PullNone>,
+	Pin<bank0::Gpio15, FunctionI2C, PullNone>,
 );
 
 type SpiBus = hal::Spi<hal::spi::Enabled, pac::SPI0, 8>;
@@ -185,30 +185,27 @@ impl UseAlt {
 /// order to demonstrate the hardware is in the right state.
 #[allow(unused)]
 struct Pins {
-	h_sync: Pin<bank0::Gpio0, Function<pac::PIO0>>,
-	v_sync: Pin<bank0::Gpio1, Function<pac::PIO0>>,
-	red0: Pin<bank0::Gpio2, Function<pac::PIO0>>,
-	red1: Pin<bank0::Gpio3, Function<pac::PIO0>>,
-	red2: Pin<bank0::Gpio4, Function<pac::PIO0>>,
-	red3: Pin<bank0::Gpio5, Function<pac::PIO0>>,
-	green0: Pin<bank0::Gpio6, Function<pac::PIO0>>,
-	green1: Pin<bank0::Gpio7, Function<pac::PIO0>>,
-	green2: Pin<bank0::Gpio8, Function<pac::PIO0>>,
-	green3: Pin<bank0::Gpio9, Function<pac::PIO0>>,
-	blue0: Pin<bank0::Gpio10, Function<pac::PIO0>>,
-	blue1: Pin<bank0::Gpio11, Function<pac::PIO0>>,
-	blue2: Pin<bank0::Gpio12, Function<pac::PIO0>>,
-	blue3: Pin<bank0::Gpio13, Function<pac::PIO0>>,
-	npower_save: Pin<bank0::Gpio23, Output<PushPull>>,
-	spi_cipo: Pin<bank0::Gpio16, Function<hal::gpio::Spi>>,
-	nspi_cs_io: Pin<bank0::Gpio17, Output<PushPull>>,
-	spi_clk: Pin<bank0::Gpio18, Function<hal::gpio::Spi>>,
-	spi_copi: Pin<bank0::Gpio19, Function<hal::gpio::Spi>>,
-	noutput_en: Pin<bank0::Gpio21, Output<PushPull>>,
-	i2s_adc_data: Pin<bank0::Gpio22, Function<pac::PIO1>>,
-	i2s_dac_data: Pin<bank0::Gpio26, Function<pac::PIO1>>,
-	i2s_bit_clock: Pin<bank0::Gpio27, Function<pac::PIO1>>,
-	i2s_lr_clock: Pin<bank0::Gpio28, Function<pac::PIO1>>,
+	h_sync: Pin<bank0::Gpio0, FunctionPio0, PullNone>,
+	v_sync: Pin<bank0::Gpio1, FunctionPio0, PullNone>,
+	red0: Pin<bank0::Gpio2, FunctionPio0, PullNone>,
+	red1: Pin<bank0::Gpio3, FunctionPio0, PullNone>,
+	red2: Pin<bank0::Gpio4, FunctionPio0, PullNone>,
+	red3: Pin<bank0::Gpio5, FunctionPio0, PullNone>,
+	green0: Pin<bank0::Gpio6, FunctionPio0, PullNone>,
+	green1: Pin<bank0::Gpio7, FunctionPio0, PullNone>,
+	green2: Pin<bank0::Gpio8, FunctionPio0, PullNone>,
+	green3: Pin<bank0::Gpio9, FunctionPio0, PullNone>,
+	blue0: Pin<bank0::Gpio10, FunctionPio0, PullNone>,
+	blue1: Pin<bank0::Gpio11, FunctionPio0, PullNone>,
+	blue2: Pin<bank0::Gpio12, FunctionPio0, PullNone>,
+	blue3: Pin<bank0::Gpio13, FunctionSioOutput, PullNone>,
+	npower_save: Pin<bank0::Gpio23, FunctionSioOutput, PullNone>,
+	nspi_cs_io: Pin<bank0::Gpio17, FunctionSioOutput, PullNone>,
+	noutput_en: Pin<bank0::Gpio21, FunctionSioOutput, PullNone>,
+	i2s_adc_data: Pin<bank0::Gpio22, FunctionPio1, PullNone>,
+	i2s_dac_data: Pin<bank0::Gpio26, FunctionPio1, PullNone>,
+	i2s_bit_clock: Pin<bank0::Gpio27, FunctionPio1, PullNone>,
+	i2s_lr_clock: Pin<bank0::Gpio28, FunctionPio1, PullNone>,
 }
 
 // -----------------------------------------------------------------------------
@@ -577,6 +574,24 @@ impl Hardware {
 			}
 		};
 
+		let	spi_cipo = {
+						let mut pin = hal_pins.gpio16.into_mode();
+						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
+						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
+						pin
+					};
+		let spi_clk = {
+						let mut pin = hal_pins.gpio18.into_mode();
+						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
+						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
+						pin
+					};
+		let	spi_copi = {
+						let mut pin = hal_pins.gpio19.into_mode();
+						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
+						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
+						pin
+					};
 		(
 			Hardware {
 				pins: Pins {
@@ -671,29 +686,12 @@ impl Hardware {
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					},
-					spi_cipo: {
-						let mut pin = hal_pins.gpio16.into_mode();
-						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
-						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
-						pin
-					},
 					nspi_cs_io: {
 						let mut pin = hal_pins.gpio17.into_push_pull_output();
 						pin.set_high().unwrap();
 						pin
 					},
-					spi_clk: {
-						let mut pin = hal_pins.gpio18.into_mode();
-						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
-						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
-						pin
-					},
-					spi_copi: {
-						let mut pin = hal_pins.gpio19.into_mode();
-						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
-						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
-						pin
-					},
+
 					noutput_en: {
 						let mut pin = hal_pins.gpio21.into_push_pull_output();
 						pin.set_high().unwrap();
@@ -710,7 +708,7 @@ impl Hardware {
 				// edge.
 
 				// Set SPI up for 4 MHz clock, 8 data bits.
-				spi_bus: hal::Spi::new(spi).init(
+				spi_bus: hal::Spi::new(spi, (spi_copi, spi_cipo, spi_clk)).init(
 					resets,
 					clocks.peripheral_clock.freq(),
 					100_000.Hz(),
