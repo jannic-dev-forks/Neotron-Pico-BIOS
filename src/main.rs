@@ -78,7 +78,11 @@ use rp_pico::{
 	hal::{
 		self,
 		clocks::ClocksManager,
-		gpio::{bank0::{self, Gpio18, Gpio19, Gpio16}, Pin, PullUp, FunctionSioInput, FunctionI2C, PullNone, FunctionPio0, FunctionSioOutput, FunctionPio1, FunctionSpi, PullDown},
+		gpio::{
+			bank0::{self, Gpio16, Gpio18, Gpio19},
+			FunctionI2C, FunctionPio0, FunctionPio1, FunctionSioInput, FunctionSioOutput,
+			FunctionSpi, Pin, PullDown, PullNone, PullUp,
+		},
 		pac::{self, interrupt},
 		Clock,
 	},
@@ -110,9 +114,9 @@ type I2cPins = (
 );
 
 type SpiPins = (
-    Pin<Gpio19, FunctionSpi, PullDown>, // MOSI
-    Pin<Gpio16, FunctionSpi, PullDown>, // MISO
-    Pin<Gpio18, FunctionSpi, PullDown>, // SCLK
+	Pin<Gpio19, FunctionSpi, PullDown>, // MOSI
+	Pin<Gpio16, FunctionSpi, PullDown>, // MISO
+	Pin<Gpio18, FunctionSpi, PullDown>, // SCLK
 );
 
 type SpiBus = hal::Spi<hal::spi::Enabled, pac::SPI0, SpiPins, 8>;
@@ -580,24 +584,24 @@ impl Hardware {
 			}
 		};
 
-		let	spi_cipo = {
-						let mut pin = hal_pins.gpio16.into();
-						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
-						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
-						pin
-					};
+		let spi_cipo = {
+			let mut pin = hal_pins.gpio16.into();
+			pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
+			pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
+			pin
+		};
 		let spi_clk = {
-						let mut pin = hal_pins.gpio18.into();
-						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
-						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
-						pin
-					};
-		let	spi_copi = {
-						let mut pin = hal_pins.gpio19.into();
-						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
-						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
-						pin
-					};
+			let mut pin = hal_pins.gpio18.into();
+			pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
+			pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
+			pin
+		};
+		let spi_copi = {
+			let mut pin = hal_pins.gpio19.into();
+			pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
+			pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
+			pin
+		};
 		(
 			Hardware {
 				pins: Pins {
