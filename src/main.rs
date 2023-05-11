@@ -78,7 +78,7 @@ use rp_pico::{
 	hal::{
 		self,
 		clocks::ClocksManager,
-		gpio::{bank0, Function, Pin, PullUp, FunctionSioInput, FunctionI2C, self, PullNone, FunctionPio0, FunctionSioOutput, FunctionPio1},
+		gpio::{bank0::{self, Gpio18, Gpio19, Gpio16}, Pin, PullUp, FunctionSioInput, FunctionI2C, PullNone, FunctionPio0, FunctionSioOutput, FunctionPio1, FunctionSpi, PullDown},
 		pac::{self, interrupt},
 		Clock,
 	},
@@ -105,11 +105,17 @@ type Duration = fugit::Duration<u64, 1, 1_000_000>;
 type IrqPin = Pin<bank0::Gpio20, FunctionSioInput, PullUp>;
 
 type I2cPins = (
-	Pin<bank0::Gpio14, FunctionI2C, PullNone>,
-	Pin<bank0::Gpio15, FunctionI2C, PullNone>,
+	Pin<bank0::Gpio14, FunctionI2C, PullDown>,
+	Pin<bank0::Gpio15, FunctionI2C, PullDown>,
 );
 
-type SpiBus = hal::Spi<hal::spi::Enabled, pac::SPI0, 8>;
+type SpiPins = (
+    Pin<Gpio19, FunctionSpi, PullDown>, // MOSI
+    Pin<Gpio16, FunctionSpi, PullDown>, // MISO
+    Pin<Gpio18, FunctionSpi, PullDown>, // SCLK
+);
+
+type SpiBus = hal::Spi<hal::spi::Enabled, pac::SPI0, SpiPins, 8>;
 
 /// What state our SD Card can be in
 #[derive(defmt::Format, Debug, Clone, PartialEq, Eq)]
@@ -532,13 +538,13 @@ impl Hardware {
 		let raw_i2c = hal::i2c::I2C::i2c1(
 			i2c,
 			{
-				let mut pin = hal_pins.gpio14.into_mode();
+				let mut pin = hal_pins.gpio14.into();
 				pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 				pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 				pin
 			},
 			{
-				let mut pin = hal_pins.gpio15.into_mode();
+				let mut pin = hal_pins.gpio15.into();
 				pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 				pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 				pin
@@ -575,19 +581,19 @@ impl Hardware {
 		};
 
 		let	spi_cipo = {
-						let mut pin = hal_pins.gpio16.into_mode();
+						let mut pin = hal_pins.gpio16.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					};
 		let spi_clk = {
-						let mut pin = hal_pins.gpio18.into_mode();
+						let mut pin = hal_pins.gpio18.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					};
 		let	spi_copi = {
-						let mut pin = hal_pins.gpio19.into_mode();
+						let mut pin = hal_pins.gpio19.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
@@ -597,110 +603,110 @@ impl Hardware {
 				pins: Pins {
 					// Disable power save mode to force SMPS into low-efficiency, low-noise mode.
 					npower_save: {
-						let mut pin = hal_pins.b_power_save.into_push_pull_output();
+						let mut pin = hal_pins.b_power_save.into();
 						pin.set_high().unwrap();
 						pin
 					},
 					// Give H-Sync, V-Sync and 12 RGB colour pins to PIO0 to output video
 					h_sync: {
-						let mut pin = hal_pins.gpio0.into_mode();
+						let mut pin = hal_pins.gpio0.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					},
 					v_sync: {
-						let mut pin = hal_pins.gpio1.into_mode();
+						let mut pin = hal_pins.gpio1.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					},
 					red0: {
-						let mut pin = hal_pins.gpio2.into_mode();
+						let mut pin = hal_pins.gpio2.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					},
 					red1: {
-						let mut pin = hal_pins.gpio3.into_mode();
+						let mut pin = hal_pins.gpio3.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					},
 					red2: {
-						let mut pin = hal_pins.gpio4.into_mode();
+						let mut pin = hal_pins.gpio4.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					},
 					red3: {
-						let mut pin = hal_pins.gpio5.into_mode();
+						let mut pin = hal_pins.gpio5.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					},
 					green0: {
-						let mut pin = hal_pins.gpio6.into_mode();
+						let mut pin = hal_pins.gpio6.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					},
 					green1: {
-						let mut pin = hal_pins.gpio7.into_mode();
+						let mut pin = hal_pins.gpio7.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					},
 					green2: {
-						let mut pin = hal_pins.gpio8.into_mode();
+						let mut pin = hal_pins.gpio8.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					},
 					green3: {
-						let mut pin = hal_pins.gpio9.into_mode();
+						let mut pin = hal_pins.gpio9.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					},
 					blue0: {
-						let mut pin = hal_pins.gpio10.into_mode();
+						let mut pin = hal_pins.gpio10.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					},
 					blue1: {
-						let mut pin = hal_pins.gpio11.into_mode();
+						let mut pin = hal_pins.gpio11.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					},
 					blue2: {
-						let mut pin = hal_pins.gpio12.into_mode();
+						let mut pin = hal_pins.gpio12.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					},
 					blue3: {
-						let mut pin = hal_pins.gpio13.into_mode();
+						let mut pin = hal_pins.gpio13.into();
 						pin.set_drive_strength(hal::gpio::OutputDriveStrength::EightMilliAmps);
 						pin.set_slew_rate(hal::gpio::OutputSlewRate::Fast);
 						pin
 					},
 					nspi_cs_io: {
-						let mut pin = hal_pins.gpio17.into_push_pull_output();
+						let mut pin = hal_pins.gpio17.into();
 						pin.set_high().unwrap();
 						pin
 					},
 
 					noutput_en: {
-						let mut pin = hal_pins.gpio21.into_push_pull_output();
+						let mut pin = hal_pins.gpio21.into();
 						pin.set_high().unwrap();
 						pin
 					},
-					i2s_adc_data: hal_pins.gpio22.into_mode(),
-					i2s_dac_data: hal_pins.gpio26.into_mode(),
-					i2s_bit_clock: hal_pins.gpio27.into_mode(),
-					i2s_lr_clock: hal_pins.gpio28.into_mode(),
+					i2s_adc_data: hal_pins.gpio22.into(),
+					i2s_dac_data: hal_pins.gpio26.into(),
+					i2s_bit_clock: hal_pins.gpio27.into(),
+					i2s_lr_clock: hal_pins.gpio28.into(),
 				},
 
 				// We are in SPI MODE 0. This means we change the COPI pin on the
@@ -739,7 +745,7 @@ impl Hardware {
 	/// chip-select signal.
 	fn with_io_cs<F, T>(&mut self, func: F) -> T
 	where
-		F: FnOnce(&mut hal::Spi<hal::spi::Enabled, pac::SPI0, 8_u8>) -> T,
+		F: FnOnce(&mut hal::Spi<hal::spi::Enabled, pac::SPI0, SpiPins, 8_u8>) -> T,
 	{
 		// Select MCP23S17
 		self.pins.nspi_cs_io.set_low().unwrap();
@@ -824,7 +830,7 @@ impl Hardware {
 	/// SPI bus object), then de-activates the CS pin.
 	fn with_bus_cs<F>(&mut self, cs: u8, func: F)
 	where
-		F: FnOnce(&mut hal::Spi<hal::spi::Enabled, pac::SPI0, 8_u8>, &mut [u8]),
+		F: FnOnce(&mut hal::Spi<hal::spi::Enabled, pac::SPI0, SpiPins, 8_u8>, &mut [u8]),
 	{
 		// Only CS0..CS7 is valid
 		let cs = cs & 0b111;
