@@ -208,7 +208,7 @@ struct Pins {
 	blue0: Pin<bank0::Gpio10, FunctionPio0, PullNone>,
 	blue1: Pin<bank0::Gpio11, FunctionPio0, PullNone>,
 	blue2: Pin<bank0::Gpio12, FunctionPio0, PullNone>,
-	blue3: Pin<bank0::Gpio13, FunctionSioOutput, PullNone>,
+	blue3: Pin<bank0::Gpio13, FunctionPio0, PullNone>,
 	npower_save: Pin<bank0::Gpio23, FunctionSioOutput, PullNone>,
 	nspi_cs_io: Pin<bank0::Gpio17, FunctionSioOutput, PullNone>,
 	noutput_en: Pin<bank0::Gpio21, FunctionSioOutput, PullNone>,
