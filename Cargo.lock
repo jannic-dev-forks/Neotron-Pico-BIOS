@@ -335,6 +335,45 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
+name = "frunk"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a89c703bf50009f383a0873845357cc400a95fc535f836feddfe015d7df6e1e0"
+dependencies = [
+ "frunk_core",
+ "frunk_derives",
+]
+
+[[package]]
+name = "frunk_core"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a446d01a558301dca28ef43222864a9fa2bd9a2e71370f769d5d5d5ec9f3537"
+
+[[package]]
+name = "frunk_derives"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b83164912bb4c97cfe0772913c7af7387ee2e00cb6d4636fb65a35b3d0c8f173"
+dependencies = [
+ "frunk_proc_macro_helpers",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "frunk_proc_macro_helpers"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "015425591bbeb0f5b8a75593340f1789af428e9f887a4f1e36c0c471f067ef50"
+dependencies = [
+ "frunk_core",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "fugit"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -838,7 +877,7 @@ checksum = "a5996294f19bd3aae0453a862ad728f60e6600695733dd5df01da90c54363a3c"
 [[package]]
 name = "rp-pico"
 version = "0.7.0"
-source = "git+https://github.com/rp-rs/rp-hal-boards?rev=847532ddd0297d4f85eb198de73e1caf4387e901#847532ddd0297d4f85eb198de73e1caf4387e901"
+source = "git+https://github.com/jannic-dev-forks/rp-hal-boards?branch=hal-0.9-gpio#2186ee339845cbed84fe9ef1096f052280787627"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -858,13 +897,14 @@ dependencies = [
 
 [[package]]
 name = "rp2040-hal"
-version = "0.8.1"
-source = "git+https://github.com/rp-rs/rp-hal?rev=3448cd9c026b49210c8f46e99012efc1d2536284#3448cd9c026b49210c8f46e99012efc1d2536284"
+version = "0.9.0"
+source = "git+https://github.com/rp-rs/rp-hal?rev=b83633f24dd13891a937d5c9522024dfad6aa0a2#b83633f24dd13891a937d5c9522024dfad6aa0a2"
 dependencies = [
  "cortex-m",
  "critical-section",
  "embedded-dma",
  "embedded-hal",
+ "frunk",
  "fugit",
  "itertools",
  "nb 1.1.0",
@@ -881,7 +921,7 @@ dependencies = [
 [[package]]
 name = "rp2040-hal-macros"
 version = "0.1.0"
-source = "git+https://github.com/rp-rs/rp-hal?rev=3448cd9c026b49210c8f46e99012efc1d2536284#3448cd9c026b49210c8f46e99012efc1d2536284"
+source = "git+https://github.com/rp-rs/rp-hal?rev=b83633f24dd13891a937d5c9522024dfad6aa0a2#b83633f24dd13891a937d5c9522024dfad6aa0a2"
 dependencies = [
  "proc-macro2",
  "quote",

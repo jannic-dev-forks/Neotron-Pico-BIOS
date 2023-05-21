@@ -11,7 +11,7 @@ version = "0.5.0"
 # Useful Cortex-M specific functions (e.g. SysTick)
 cortex-m = "0.7"
 # The Raspberry Pi Pico HAL
-rp-pico = { version = "0.7", default-features = false, features = [ "rt", "critical-section-impl", "rom-func-cache" ], git = "https://github.com/rp-rs/rp-hal-boards", rev = "847532ddd0297d4f85eb198de73e1caf4387e901" }
+rp-pico = { version = "0.7", default-features = false, features = [ "rt", "critical-section-impl", "rom-func-cache" ] }
 # Cortex-M run-time (or start-up) code
 cortex-m-rt = "0.7"
 # The BIOS to OS API
@@ -71,5 +71,6 @@ lto = true
 opt-level = "s"
 
 [patch.crates-io]
-rp2040-hal = { version = "0.8.1", git = "https://github.com/rp-rs/rp-hal", rev = "3448cd9c026b49210c8f46e99012efc1d2536284" }
+rp2040-hal = { git = "https://github.com/rp-rs/rp-hal", rev = "b83633f24dd13891a937d5c9522024dfad6aa0a2" }
+rp-pico = { git = "https://github.com/jannic-dev-forks/rp-hal-boards", branch = "hal-0.9-gpio" }
 

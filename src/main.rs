@@ -560,7 +560,7 @@ impl Hardware {
 		let i2c = shared_bus::BusManagerSimple::new(raw_i2c);
 		let proxy = i2c.acquire_i2c();
 		let mut external_rtc = rtc::Rtc::new(proxy);
-		let timer = hal::timer::Timer::new(timer, resets);
+		let timer = hal::timer::Timer::new(timer, resets, &clocks);
 		// Do a conversion from external RTC time (chrono::NaiveDateTime) to a format we can track
 		let ticks_at_boot_us = match external_rtc.get_time(i2c.acquire_i2c()) {
 			Ok(time) => {
