@@ -71,6 +71,6 @@ lto = true
 opt-level = "s"
 
 [patch.crates-io]
-rp2040-hal = { git = "https://github.com/rp-rs/rp-hal", rev = "b83633f24dd13891a937d5c9522024dfad6aa0a2" }
+rp2040-hal = { git = "https://github.com/rp-rs/rp-hal", rev = "5971c03e462d49e7c0e79f9630e45765f98c5afa" }
 rp-pico = { git = "https://github.com/jannic-dev-forks/rp-hal-boards", branch = "hal-0.9-gpio" }
 
