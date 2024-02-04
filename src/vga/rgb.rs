@@ -37,13 +37,9 @@
 /// shifts-right.
 #[repr(transparent)]
 #[derive(Copy, Clone, PartialEq, Eq, Default)]
-pub struct RGBPair(u32);
+pub struct RGBPair(pub u32);
 
 impl RGBPair {
-	pub const fn new() -> RGBPair {
-		RGBPair(0)
-	}
-
 	pub const fn from_pixels(first: RGBColour, second: RGBColour) -> RGBPair {
 		let first: u32 = first.0 as u32;
 		let second: u32 = second.0 as u32;

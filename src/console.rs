@@ -59,8 +59,8 @@ impl TextConsole {
 			// White on Black, with the default palette
 			current_attr: AtomicU8::new(
 				Attr::new(
-					TextForegroundColour::WHITE,
-					TextBackgroundColour::BLACK,
+					TextForegroundColour::White,
+					TextBackgroundColour::Black,
 					false,
 				)
 				.0,
@@ -71,13 +71,8 @@ impl TextConsole {
 	/// Update the text buffer we are using.
 	///
 	/// Will reset the cursor. The screen is not cleared.
-	pub fn set_text_buffer(
-		&self,
-		text_buffer: &'static mut [GlyphAttr;
-			             crate::vga::MAX_TEXT_ROWS * crate::vga::MAX_TEXT_COLS],
-	) {
-		self.text_buffer
-			.store(text_buffer.as_mut_ptr(), Ordering::Relaxed)
+	pub unsafe fn set_text_buffer(&self, text_buffer: *mut GlyphAttr) {
+		self.text_buffer.store(text_buffer, Ordering::Relaxed)
 	}
 
 	/// Place a single Code Page 850 encoded 8-bit character on the screen.
@@ -88,23 +83,20 @@ impl TextConsole {
 		// Load from global state
 		let mut row = self.current_row.load(Ordering::Relaxed);
 		let mut col = self.current_col.load(Ordering::Relaxed);
-		let buffer = self.text_buffer.load(Ordering::Relaxed);
 
-		if !buffer.is_null() {
-			self.write_at(glyph, buffer, &mut row, &mut col);
-			// Push back to global state
-			self.current_row.store(row, Ordering::Relaxed);
-			self.current_col.store(col, Ordering::Relaxed);
-		}
+		self.write_at(glyph, &mut row, &mut col);
+		// Push back to global state
+		self.current_row.store(row, Ordering::Relaxed);
+		self.current_col.store(col, Ordering::Relaxed);
 	}
 
 	/// Moves the text cursor to the specified row and column.
 	///
 	/// If a value is out of bounds, the cursor is not moved in that axis.
 	pub fn move_to(&self, row: u16, col: u16) {
-		let mode = crate::vga::VIDEO_MODE.get_mode();
-		let num_rows = mode.text_height().unwrap_or(0);
-		let num_cols = mode.text_width().unwrap_or(0);
+		let info = crate::vga::VIDEO_MODE.get_mode();
+		let num_rows = info.mode.text_height().unwrap_or(0);
+		let num_cols = info.mode.text_width().unwrap_or(0);
 		if row < num_rows {
 			self.current_row.store(row, Ordering::Relaxed);
 		}
@@ -261,10 +253,11 @@ impl TextConsole {
 	/// The character is relative to the current font, but newline and carriage
 	/// return will be interpreted appropriately. The given `row` and `col` are
 	/// updated.
-	fn write_at(&self, glyph: Glyph, buffer: *mut GlyphAttr, row: &mut u16, col: &mut u16) {
-		let mode = crate::vga::VIDEO_MODE.get_mode();
-		let num_rows = mode.text_height().unwrap_or(0) as usize;
-		let num_cols = mode.text_width().unwrap_or(0) as usize;
+	fn write_at(&self, glyph: Glyph, row: &mut u16, col: &mut u16) {
+		let info = crate::vga::VIDEO_MODE.get_mode();
+		let buffer = info.ptr as *mut GlyphAttr;
+		let num_rows = info.mode.text_height().unwrap_or(0) as usize;
+		let num_cols = info.mode.text_width().unwrap_or(0) as usize;
 		let attr = Attr(self.current_attr.load(Ordering::Relaxed));
 
 		if glyph.0 == b'\r' {
@@ -319,18 +312,15 @@ impl core::fmt::Write for &TextConsole {
 		// Load from global state
 		let mut row = self.current_row.load(Ordering::Relaxed);
 		let mut col = self.current_col.load(Ordering::Relaxed);
-		let buffer = self.text_buffer.load(Ordering::Relaxed);
 
-		if !buffer.is_null() {
-			for ch in s.chars() {
-				let b = TextConsole::map_char_to_glyph(ch);
-				self.write_at(b, buffer, &mut row, &mut col);
-			}
-
-			// Push back to global state
-			self.current_row.store(row, Ordering::Relaxed);
-			self.current_col.store(col, Ordering::Relaxed);
+		for ch in s.chars() {
+			let b = TextConsole::map_char_to_glyph(ch);
+			self.write_at(b, &mut row, &mut col);
 		}
+
+		// Push back to global state
+		self.current_row.store(row, Ordering::Relaxed);
+		self.current_col.store(col, Ordering::Relaxed);
 
 		Ok(())
 	}
