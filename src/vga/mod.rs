@@ -222,6 +222,14 @@ impl RenderEngine {
 				// Bitmap with 1 bit per pixel
 				self.draw_next_line_chunky1(scan_line_buffer, current_line_num);
 			}
+			neotron_common_bios::video::Format::Chunky2 => {
+				// Bitmap with 2 bit per pixel
+				self.draw_next_line_chunky2(scan_line_buffer, current_line_num);
+			}
+			neotron_common_bios::video::Format::Chunky4 => {
+				// Bitmap with 4 bits per pixel
+				self.draw_next_line_chunky4(scan_line_buffer, current_line_num);
+			}
 			_ => {
 				// Draw nothing
 			}
@@ -231,7 +239,7 @@ impl RenderEngine {
 	/// Draw a line of 1-bpp bitmap as pixels.
 	///
 	/// Writes into the relevant pixel buffer (either [`PIXEL_DATA_BUFFER_ODD`]
-	/// or [`PIXEL_DATA_BUFFER_EVEN`]) using the 8x16 font.
+	/// or [`PIXEL_DATA_BUFFER_EVEN`]) assuming the framebuffer is a bitmap.
 	///
 	/// The `current_line_num` goes from `0..NUM_LINES`.
 	#[link_section = ".data"]
@@ -241,8 +249,7 @@ impl RenderEngine {
 		current_line_num: u16,
 	) {
 		let base_ptr = self.current_video_ptr as *const u8;
-		let line_len_pixels = self.current_video_mode.horizontal_pixels();
-		let line_len_bytes = (line_len_pixels / 8) as usize;
+		let line_len_bytes = self.current_video_mode.line_size_bytes();
 		let is_double = self.current_video_mode.is_horiz_2x();
 		let offset = usize::from(current_line_num) * line_len_bytes;
 		let line_start = unsafe { base_ptr.add(offset) };
@@ -253,73 +260,69 @@ impl RenderEngine {
 		if is_double {
 			// double-width mode.
 			// sixteen RGB pixels (eight pairs) per byte
-			let white = RGBPair::from_pixels(white_pixel, white_pixel);
-			let black = RGBPair::from_pixels(black_pixel, black_pixel);
+			let white_pair = RGBPair::from_pixels(white_pixel, white_pixel);
+			let black_pair = RGBPair::from_pixels(black_pixel, black_pixel);
 			for col in 0..line_len_bytes {
 				let mono_pixels = unsafe { line_start.add(col).read() };
 				unsafe {
 					// 0bX-------
-					scan_line_buffer_ptr
-						.offset(0)
-						.write(if (mono_pixels & (1 << 7)) != 0 {
-							white
-						} else {
-							black
-						});
+					let pixel = (mono_pixels & 1 << 7) != 0;
+					scan_line_buffer_ptr.offset(0).write(if pixel {
+						white_pair
+					} else {
+						black_pair
+					});
 					// 0b-X------
-					scan_line_buffer_ptr
-						.offset(1)
-						.write(if (mono_pixels & (1 << 6)) != 0 {
-							white
-						} else {
-							black
-						});
+					let pixel = (mono_pixels & 1 << 6) != 0;
+					scan_line_buffer_ptr.offset(1).write(if pixel {
+						white_pair
+					} else {
+						black_pair
+					});
 					// 0b--X-----
-					scan_line_buffer_ptr
-						.offset(2)
-						.write(if (mono_pixels & (1 << 5)) != 0 {
-							white
-						} else {
-							black
-						});
+					let pixel = (mono_pixels & 1 << 5) != 0;
+					scan_line_buffer_ptr.offset(2).write(if pixel {
+						white_pair
+					} else {
+						black_pair
+					});
 					// 0b---X----
-					scan_line_buffer_ptr
-						.offset(3)
-						.write(if (mono_pixels & (1 << 4)) != 0 {
-							white
-						} else {
-							black
-						});
+					let pixel = (mono_pixels & 1 << 4) != 0;
+					scan_line_buffer_ptr.offset(3).write(if pixel {
+						white_pair
+					} else {
+						black_pair
+					});
 					// 0b----X---
-					scan_line_buffer_ptr
-						.offset(4)
-						.write(if (mono_pixels & (1 << 3)) != 0 {
-							white
-						} else {
-							black
-						});
+					let pixel = (mono_pixels & 1 << 3) != 0;
+					scan_line_buffer_ptr.offset(4).write(if pixel {
+						white_pair
+					} else {
+						black_pair
+					});
 					// 0b-----X--
-					scan_line_buffer_ptr
-						.offset(5)
-						.write(if (mono_pixels & (1 << 2)) != 0 {
-							white
-						} else {
-							black
-						});
+					let pixel = (mono_pixels & 1 << 2) != 0;
+					scan_line_buffer_ptr.offset(5).write(if pixel {
+						white_pair
+					} else {
+						black_pair
+					});
 					// 0b------X-
-					scan_line_buffer_ptr
-						.offset(6)
-						.write(if (mono_pixels & (1 << 1)) != 0 {
-							white
-						} else {
-							black
-						});
+					let pixel = (mono_pixels & 1 << 1) != 0;
+					scan_line_buffer_ptr.offset(6).write(if pixel {
+						white_pair
+					} else {
+						black_pair
+					});
 					// 0b-------X
-					scan_line_buffer_ptr
-						.offset(7)
-						.write(if (mono_pixels & 1) == 0 { white } else { black });
+					let pixel = (mono_pixels & 1) != 0;
+					scan_line_buffer_ptr.offset(7).write(if pixel {
+						white_pair
+					} else {
+						black_pair
+					});
 					// move pointer along 16 pixels / 8 pairs
-					scan_line_buffer_ptr = scan_line_buffer_ptr.offset(8);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(8);
 				}
 			}
 		} else {
@@ -338,14 +341,254 @@ impl RenderEngine {
 					scan_line_buffer_ptr.write(pair);
 					// 0b--XX----
 					let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels >> 4);
-					scan_line_buffer_ptr.offset(1).write(pair);
+					scan_line_buffer_ptr.add(1).write(pair);
 					// 0b----XX--
 					let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels >> 2);
-					scan_line_buffer_ptr.offset(2).write(pair);
+					scan_line_buffer_ptr.add(2).write(pair);
 					// 0b------XX
 					let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels);
-					scan_line_buffer_ptr.offset(3).write(pair);
-					scan_line_buffer_ptr = scan_line_buffer_ptr.offset(4);
+					scan_line_buffer_ptr.add(3).write(pair);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(4);
+				}
+			}
+		}
+	}
+
+	/// Draw a line of 2-bpp bitmap as pixels.
+	///
+	/// Writes into the relevant pixel buffer (either [`PIXEL_DATA_BUFFER_ODD`]
+	/// or [`PIXEL_DATA_BUFFER_EVEN`]) assuming the framebuffer is a bitmap.
+	///
+	/// The `current_line_num` goes from `0..NUM_LINES`.
+	#[link_section = ".data"]
+	pub fn draw_next_line_chunky2(
+		&mut self,
+		scan_line_buffer: &mut LineBuffer,
+		current_line_num: u16,
+	) {
+		let is_double = self.current_video_mode.is_horiz_2x();
+		let base_ptr = self.current_video_ptr as *const u8;
+		let line_len_bytes = self.current_video_mode.line_size_bytes();
+		let offset = usize::from(current_line_num) * line_len_bytes;
+		let line_start = unsafe { base_ptr.add(offset) };
+		// Get a pointer into our scan-line buffer
+		let mut scan_line_buffer_ptr = scan_line_buffer.pixels.as_mut_ptr();
+		let pixel_colours = [
+			RGBColour(VIDEO_PALETTE[0].load(Ordering::Relaxed)),
+			RGBColour(VIDEO_PALETTE[1].load(Ordering::Relaxed)),
+			RGBColour(VIDEO_PALETTE[2].load(Ordering::Relaxed)),
+			RGBColour(VIDEO_PALETTE[3].load(Ordering::Relaxed)),
+		];
+		if is_double {
+			let pixel_pairs = [
+				RGBPair::from_pixels(pixel_colours[0], pixel_colours[0]),
+				RGBPair::from_pixels(pixel_colours[1], pixel_colours[1]),
+				RGBPair::from_pixels(pixel_colours[2], pixel_colours[2]),
+				RGBPair::from_pixels(pixel_colours[3], pixel_colours[3]),
+			];
+			let pixel_pairs_ptr = pixel_pairs.as_ptr();
+			// Double-width mode.
+			// eight RGB pixels (four pairs) per byte
+			for col in 0..line_len_bytes {
+				let chunky_pixels = unsafe { line_start.add(col).read() } as usize;
+				unsafe {
+					let pair = pixel_pairs_ptr.add((chunky_pixels >> 6) & 0x03);
+					scan_line_buffer_ptr.write(*pair);
+					let pair = pixel_pairs_ptr.add((chunky_pixels >> 4) & 0x03);
+					scan_line_buffer_ptr.add(1).write(*pair);
+					let pair = pixel_pairs_ptr.add((chunky_pixels >> 2) & 0x03);
+					scan_line_buffer_ptr.add(2).write(*pair);
+					let pair = pixel_pairs_ptr.add(chunky_pixels & 0x03);
+					scan_line_buffer_ptr.add(3).write(*pair);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(4);
+				}
+			}
+		} else {
+			let pixel_pairs = [
+				RGBPair::from_pixels(pixel_colours[0], pixel_colours[0]),
+				RGBPair::from_pixels(pixel_colours[0], pixel_colours[1]),
+				RGBPair::from_pixels(pixel_colours[0], pixel_colours[2]),
+				RGBPair::from_pixels(pixel_colours[0], pixel_colours[3]),
+				RGBPair::from_pixels(pixel_colours[1], pixel_colours[0]),
+				RGBPair::from_pixels(pixel_colours[1], pixel_colours[1]),
+				RGBPair::from_pixels(pixel_colours[1], pixel_colours[2]),
+				RGBPair::from_pixels(pixel_colours[1], pixel_colours[3]),
+				RGBPair::from_pixels(pixel_colours[2], pixel_colours[0]),
+				RGBPair::from_pixels(pixel_colours[2], pixel_colours[1]),
+				RGBPair::from_pixels(pixel_colours[2], pixel_colours[2]),
+				RGBPair::from_pixels(pixel_colours[2], pixel_colours[3]),
+				RGBPair::from_pixels(pixel_colours[3], pixel_colours[0]),
+				RGBPair::from_pixels(pixel_colours[3], pixel_colours[1]),
+				RGBPair::from_pixels(pixel_colours[3], pixel_colours[2]),
+				RGBPair::from_pixels(pixel_colours[3], pixel_colours[3]),
+			];
+			let pixel_pairs_ptr = pixel_pairs.as_ptr();
+			// Non-double-width mode.
+			// four RGB pixels (two pairs) per byte
+			for col in 0..line_len_bytes {
+				let chunky_pixels = unsafe { line_start.add(col).read() } as usize;
+				unsafe {
+					let pair = pixel_pairs_ptr.add(chunky_pixels >> 4);
+					scan_line_buffer_ptr.write(*pair);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(1);
+					let pair = pixel_pairs_ptr.add(chunky_pixels & 0x0F);
+					scan_line_buffer_ptr.write(*pair);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(1);
+				}
+			}
+		}
+	}
+
+	/// Draw a line of 4-bpp bitmap as pixels.
+	///
+	/// Writes into the relevant pixel buffer (either [`PIXEL_DATA_BUFFER_ODD`]
+	/// or [`PIXEL_DATA_BUFFER_EVEN`]) assuming the framebuffer is a bitmap.
+	///
+	/// The `current_line_num` goes from `0..NUM_LINES`.
+	#[link_section = ".data"]
+	pub fn draw_next_line_chunky4(
+		&mut self,
+		scan_line_buffer: &mut LineBuffer,
+		current_line_num: u16,
+	) {
+		let is_double = self.current_video_mode.is_horiz_2x();
+		let base_ptr = self.current_video_ptr as *const u8;
+		let line_len_bytes = self.current_video_mode.line_size_bytes();
+		let line_start_offset_bytes = usize::from(current_line_num) * line_len_bytes;
+		let line_start_bytes = unsafe { base_ptr.add(line_start_offset_bytes) };
+		// Get a pointer into our scan-line buffer
+		let mut scan_line_buffer_ptr = scan_line_buffer.pixels.as_mut_ptr();
+		let palette_ptr = VIDEO_PALETTE.as_ptr() as *const RGBColour;
+		if is_double {
+			// Double-width mode.
+			// four RGB pixels (two pairs) per byte
+			for col in 0..line_len_bytes {
+				unsafe {
+					let chunky_pixels = line_start_bytes.add(col).read() as usize;
+					let left = palette_ptr.add((chunky_pixels >> 4) & 0x0F).read();
+					let right = palette_ptr.add((chunky_pixels >> 0) & 0x0F).read();
+					scan_line_buffer_ptr.write(RGBPair::from_pixels(left, left));
+					scan_line_buffer_ptr
+						.add(1)
+						.write(RGBPair::from_pixels(right, right));
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(2);
+				}
+			}
+		} else {
+			// Single-width mode - using the interpolator.
+			//
+			// It's able to shift and mask out the 4 bits we want from the
+			// chunky byte, and add the palette pointer, all in a single clock
+			// cycle.
+			//
+			// two RGB pixels (one pair) per byte eight RGB pixels (four pairs)
+			// per word
+
+			// Set up the interpolator. This is safe because core1 has its own.
+			let sio = unsafe { &*rp_pico::pac::SIO::ptr() };
+			sio.interp0_base0.write(|w| {
+				unsafe { w.bits(palette_ptr as u32) };
+				w
+			});
+			sio.interp0_base1.write(|w| {
+				unsafe { w.bits(palette_ptr as u32) };
+				w
+			});
+			// lane0 will pull out the higher of the two 4-bit chunky pixels, but shifted
+			// by 2 bits to account for the 32-bit palette entry
+			sio.interp0_ctrl_lane0.write(|w| {
+				w.shift().variant(4);
+				w.mask_lsb().variant(2);
+				w.mask_msb().variant(5);
+				w
+			});
+			// lane1 will pull out the lower of the two 4-bit chunky pixels, but shifted
+			// by 2 bits to account for the 32-bit palette entry
+			sio.interp0_ctrl_lane1.write(|w| {
+				w.shift().variant(0);
+				w.mask_lsb().variant(2);
+				w.mask_msb().variant(5);
+				w
+			});
+			let line_start_words = line_start_bytes as *const u32;
+			let line_len_words = line_len_bytes / 4;
+			for col in 0..line_len_words {
+				unsafe {
+					let chunky_pixels = line_start_words.add(col).read();
+
+					// First two pixels
+					// Shift up by 2 bits before we load, to account for the 32
+					// bit size of each palette entry.
+					sio.interp0_accum0.write(|w| {
+						w.bits(chunky_pixels << 2);
+						w
+					});
+					sio.interp0_accum1.write(|w| {
+						w.bits(chunky_pixels << 2);
+						w
+					});
+					// now we get the palette address for the left pixel
+					let left_addr = sio.interp0_peek_lane0.read().bits() as usize as *const u16;
+					// and we get the palette address for the right pixel
+					let right_addr = sio.interp0_peek_lane1.read().bits() as usize as *const u16;
+					// read from the palette, pair up, and put in the buffer
+					let pair = RGBPair::from_pixels(RGBColour(*left_addr), RGBColour(*right_addr));
+					scan_line_buffer_ptr.write(pair);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(1);
+
+					// Second two pixels
+					sio.interp0_accum0.write(|w| {
+						w.bits(chunky_pixels >> 6);
+						w
+					});
+					sio.interp0_accum1.write(|w| {
+						w.bits(chunky_pixels >> 6);
+						w
+					});
+					// now we get the palette address for the left pixel
+					let left_addr = sio.interp0_peek_lane0.read().bits() as usize as *const u16;
+					// and we get the palette address for the right pixel
+					let right_addr = sio.interp0_peek_lane1.read().bits() as usize as *const u16;
+					// read from the palette, pair up, and put in the buffer
+					let pair = RGBPair::from_pixels(RGBColour(*left_addr), RGBColour(*right_addr));
+					scan_line_buffer_ptr.write(pair);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(1);
+
+					// Third two pixels
+					sio.interp0_accum0.write(|w| {
+						w.bits(chunky_pixels >> 14);
+						w
+					});
+					sio.interp0_accum1.write(|w| {
+						w.bits(chunky_pixels >> 14);
+						w
+					});
+					// now we get the palette address for the left pixel
+					let left_addr = sio.interp0_peek_lane0.read().bits() as usize as *const u16;
+					// and we get the palette address for the right pixel
+					let right_addr = sio.interp0_peek_lane1.read().bits() as usize as *const u16;
+					// read from the palette, pair up, and put in the buffer
+					let pair = RGBPair::from_pixels(RGBColour(*left_addr), RGBColour(*right_addr));
+					scan_line_buffer_ptr.write(pair);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(1);
+
+					// Fourth two pixels
+					sio.interp0_accum0.write(|w| {
+						w.bits(chunky_pixels >> 22);
+						w
+					});
+					sio.interp0_accum1.write(|w| {
+						w.bits(chunky_pixels >> 22);
+						w
+					});
+					// now we get the palette address for the left pixel
+					let left_addr = sio.interp0_peek_lane0.read().bits() as usize as *const u16;
+					// and we get the palette address for the right pixel
+					let right_addr = sio.interp0_peek_lane1.read().bits() as usize as *const u16;
+					// read from the palette, pair up, and put in the buffer
+					let pair = RGBPair::from_pixels(RGBColour(*left_addr), RGBColour(*right_addr));
+					scan_line_buffer_ptr.write(pair);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(1);
 				}
 			}
 		}
@@ -406,15 +649,15 @@ impl RenderEngine {
 				scan_line_buffer_ptr.write(pair);
 				// 0b--XX----
 				let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels >> 4);
-				scan_line_buffer_ptr.offset(1).write(pair);
+				scan_line_buffer_ptr.add(1).write(pair);
 				// 0b----XX--
 				let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels >> 2);
-				scan_line_buffer_ptr.offset(2).write(pair);
+				scan_line_buffer_ptr.add(2).write(pair);
 				// 0b------XX
 				let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels);
-				scan_line_buffer_ptr.offset(3).write(pair);
+				scan_line_buffer_ptr.add(3).write(pair);
 
-				scan_line_buffer_ptr = scan_line_buffer_ptr.offset(4);
+				scan_line_buffer_ptr = scan_line_buffer_ptr.add(4);
 			}
 		}
 	}
@@ -1734,13 +1977,17 @@ pub fn test_video_mode(mode: neotron_common_bios::video::Mode) -> bool {
 				| neotron_common_bios::video::Timing::T640x400,
 			neotron_common_bios::video::Format::Text8x16
 				| neotron_common_bios::video::Format::Text8x8
-				| neotron_common_bios::video::Format::Chunky1,
+				| neotron_common_bios::video::Format::Chunky1
+				| neotron_common_bios::video::Format::Chunky2
+				| neotron_common_bios::video::Format::Chunky4,
 			false,
 			false,
 		) | (
 			neotron_common_bios::video::Timing::T640x480
 				| neotron_common_bios::video::Timing::T640x400,
-			neotron_common_bios::video::Format::Chunky1,
+			neotron_common_bios::video::Format::Chunky1
+				| neotron_common_bios::video::Format::Chunky2
+				| neotron_common_bios::video::Format::Chunky4,
 			true,
 			false,
 		)
