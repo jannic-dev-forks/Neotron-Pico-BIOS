@@ -40,10 +40,13 @@ mod rgb;
 // Imports
 // -----------------------------------------------------------------------------
 
-use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicU16, AtomicU8, Ordering};
+use core::{
+	cell::{RefCell, UnsafeCell},
+	sync::atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering},
+};
 use defmt::{debug, trace};
 use neotron_common_bios::video::{Attr, GlyphAttr, TextBackgroundColour, TextForegroundColour};
-use rp_pico::{hal::pio::PIOExt, pac::interrupt};
+use rp2040_hal::{self as hal, pac::interrupt, pio::PIOExt};
 
 pub use rgb::{RGBColour, RGBPair};
 
@@ -56,29 +59,55 @@ pub struct Font<'a> {
 	data: &'a [u8],
 }
 
-/// Holds a video mode, but as an atomic value suitable for use in a `static`.
-pub struct AtomicModeWrapper {
-	value: AtomicU8,
+/// Holds a video mode and its framebuffer pointer as a pair.
+#[derive(Copy, Clone)]
+pub struct ModeInfo {
+	pub mode: neotron_common_bios::video::Mode,
+	pub ptr: *mut u32,
 }
 
-impl AtomicModeWrapper {
-	/// Construct a new [`AtomicModeWrapper`] with the given value.
-	const fn new(mode: crate::common::video::Mode) -> AtomicModeWrapper {
-		AtomicModeWrapper {
-			value: AtomicU8::new(mode.as_u8()),
+/// Holds a video mode and a pointer, but as an atomic value suitable for use in
+/// a `static`.
+pub struct VideoMode {
+	inner: critical_section::Mutex<RefCell<ModeInfo>>,
+}
+
+unsafe impl Sync for VideoMode {}
+
+impl VideoMode {
+	/// Construct a new [`NewModeWrapper`] with the given mode.
+	const fn new() -> VideoMode {
+		VideoMode {
+			inner: critical_section::Mutex::new(RefCell::new(ModeInfo {
+				mode: neotron_common_bios::video::Mode::new(
+					neotron_common_bios::video::Timing::T640x480,
+					neotron_common_bios::video::Format::Text8x16,
+				),
+				ptr: core::ptr::null_mut(),
+			})),
 		}
 	}
 
 	/// Set a new video mode.
-	pub fn set_mode(&self, mode: crate::common::video::Mode) {
-		self.value.store(mode.as_u8(), Ordering::SeqCst);
+	pub fn set_mode(&self, mut modeinfo: ModeInfo) {
+		if modeinfo.ptr.is_null() {
+			modeinfo.ptr = GLYPH_ATTR_ARRAY.as_ptr() as *mut u32;
+		}
+		critical_section::with(|cs| {
+			self.inner.replace(cs, modeinfo);
+		})
 	}
 
 	/// Get the current video mode.
-	pub fn get_mode(&self) -> crate::common::video::Mode {
-		let value = self.value.load(Ordering::SeqCst);
-		// Safety: the 'set_mode' function ensure this is always valid.
-		unsafe { crate::common::video::Mode::from_u8(value) }
+	pub fn get_mode(&self) -> ModeInfo {
+		let mut modeinfo = critical_section::with(|cs| {
+			let info = self.inner.borrow_ref(cs);
+			*info
+		});
+		if modeinfo.ptr.is_null() {
+			modeinfo.ptr = GLYPH_ATTR_ARRAY.as_ptr() as *mut u32;
+		}
+		modeinfo
 	}
 }
 
@@ -116,7 +145,9 @@ struct RenderEngine {
 	/// How many frames have been drawn
 	frame_count: u32,
 	/// The current video mode
-	current_video_mode: crate::common::video::Mode,
+	current_video_mode: neotron_common_bios::video::Mode,
+	/// The current framebuffer pointer
+	current_video_ptr: *const u32,
 	/// How many rows of text are we showing right now
 	num_text_rows: usize,
 	/// How many columns of text are we showing right now
@@ -129,10 +160,8 @@ impl RenderEngine {
 		RenderEngine {
 			frame_count: 0,
 			// Should match the default value of TIMING_BUFFER and VIDEO_MODE
-			current_video_mode: crate::common::video::Mode::new(
-				crate::common::video::Timing::T640x480,
-				crate::common::video::Format::Text8x16,
-			),
+			current_video_mode: unsafe { neotron_common_bios::video::Mode::from_u8(0) },
+			current_video_ptr: core::ptr::null_mut(),
 			// Should match the mode above
 			num_text_cols: 80,
 			num_text_rows: 30,
@@ -145,22 +174,22 @@ impl RenderEngine {
 		self.frame_count += 1;
 
 		// Update video mode only on first line of video
-		if VIDEO_MODE.get_mode() != self.current_video_mode {
-			self.current_video_mode = VIDEO_MODE.get_mode();
-			match self.current_video_mode.timing() {
-				crate::common::video::Timing::T640x400 => unsafe {
-					TIMING_BUFFER = TimingBuffer::make_640x400();
-				},
-				crate::common::video::Timing::T640x480 => unsafe {
-					TIMING_BUFFER = TimingBuffer::make_640x480();
-				},
-				crate::common::video::Timing::T800x600 => {
-					panic!("Can't do 800x600");
-				}
+		let modeinfo = VIDEO_MODE.get_mode();
+		self.current_video_ptr = modeinfo.ptr;
+		self.current_video_mode = modeinfo.mode;
+		match self.current_video_mode.timing() {
+			neotron_common_bios::video::Timing::T640x400 => unsafe {
+				TIMING_BUFFER = TimingBuffer::make_640x400();
+			},
+			neotron_common_bios::video::Timing::T640x480 => unsafe {
+				TIMING_BUFFER = TimingBuffer::make_640x480();
+			},
+			neotron_common_bios::video::Timing::T800x600 => {
+				panic!("Can't do 800x600");
 			}
-			self.num_text_cols = self.current_video_mode.text_width().unwrap_or(0) as usize;
-			self.num_text_rows = self.current_video_mode.text_height().unwrap_or(0) as usize;
 		}
+		self.num_text_cols = self.current_video_mode.text_width().unwrap_or(0) as usize;
+		self.num_text_rows = self.current_video_mode.text_height().unwrap_or(0) as usize;
 	}
 
 	/// Draw a line of pixels into the relevant pixel buffer (either
@@ -181,17 +210,25 @@ impl RenderEngine {
 		};
 
 		match self.current_video_mode.format() {
-			crate::common::video::Format::Text8x16 => {
+			neotron_common_bios::video::Format::Text8x16 => {
 				// Text with 8x16 glyphs
 				self.draw_next_line_text::<16>(&font16::FONT, scan_line_buffer, current_line_num)
 			}
-			crate::common::video::Format::Text8x8 => {
+			neotron_common_bios::video::Format::Text8x8 => {
 				// Text with 8x8 glyphs
 				self.draw_next_line_text::<8>(&font8::FONT, scan_line_buffer, current_line_num)
 			}
-			crate::common::video::Format::Chunky1 => {
+			neotron_common_bios::video::Format::Chunky1 => {
 				// Bitmap with 1 bit per pixel
 				self.draw_next_line_chunky1(scan_line_buffer, current_line_num);
+			}
+			neotron_common_bios::video::Format::Chunky2 => {
+				// Bitmap with 2 bit per pixel
+				self.draw_next_line_chunky2(scan_line_buffer, current_line_num);
+			}
+			neotron_common_bios::video::Format::Chunky4 => {
+				// Bitmap with 4 bits per pixel
+				self.draw_next_line_chunky4(scan_line_buffer, current_line_num);
 			}
 			_ => {
 				// Draw nothing
@@ -202,7 +239,7 @@ impl RenderEngine {
 	/// Draw a line of 1-bpp bitmap as pixels.
 	///
 	/// Writes into the relevant pixel buffer (either [`PIXEL_DATA_BUFFER_ODD`]
-	/// or [`PIXEL_DATA_BUFFER_EVEN`]) using the 8x16 font.
+	/// or [`PIXEL_DATA_BUFFER_EVEN`]) assuming the framebuffer is a bitmap.
 	///
 	/// The `current_line_num` goes from `0..NUM_LINES`.
 	#[link_section = ".data"]
@@ -211,112 +248,347 @@ impl RenderEngine {
 		scan_line_buffer: &mut LineBuffer,
 		current_line_num: u16,
 	) {
-		let base_ptr = CUSTOM_FB.load(Ordering::Relaxed) as *const u8;
-		let line_len_pixels = self.current_video_mode.horizontal_pixels();
-		let line_len_bytes = (line_len_pixels / 8) as usize;
+		let base_ptr = self.current_video_ptr as *const u8;
+		let line_len_bytes = self.current_video_mode.line_size_bytes();
 		let is_double = self.current_video_mode.is_horiz_2x();
 		let offset = usize::from(current_line_num) * line_len_bytes;
-		// Get a slice of bytes in our framebuffer. There are eight mono pixels per byte.
-		let line_slice =
-			unsafe { core::slice::from_raw_parts(base_ptr.add(offset), line_len_bytes) };
+		let line_start = unsafe { base_ptr.add(offset) };
 		// Get a pointer into our scan-line buffer
 		let mut scan_line_buffer_ptr = scan_line_buffer.pixels.as_mut_ptr();
+		let black_pixel = RGBColour(VIDEO_PALETTE[0].load(Ordering::Relaxed));
+		let white_pixel = RGBColour(VIDEO_PALETTE[15].load(Ordering::Relaxed));
 		if is_double {
 			// double-width mode.
 			// sixteen RGB pixels (eight pairs) per byte
-			let white = RGBPair::from_pixels(RGBColour::WHITE, RGBColour::WHITE);
-			let black = RGBPair::from_pixels(RGBColour::BLACK, RGBColour::BLACK);
-			for b in line_slice {
-				let mono_pixels = *b;
+			let white_pair = RGBPair::from_pixels(white_pixel, white_pixel);
+			let black_pair = RGBPair::from_pixels(black_pixel, black_pixel);
+			for col in 0..line_len_bytes {
+				let mono_pixels = unsafe { line_start.add(col).read() };
 				unsafe {
 					// 0bX-------
-					scan_line_buffer_ptr
-						.offset(0)
-						.write(if (mono_pixels & (1 << 7)) != 0 {
-							white
-						} else {
-							black
-						});
+					let pixel = (mono_pixels & 1 << 7) != 0;
+					scan_line_buffer_ptr.offset(0).write(if pixel {
+						white_pair
+					} else {
+						black_pair
+					});
 					// 0b-X------
-					scan_line_buffer_ptr
-						.offset(1)
-						.write(if (mono_pixels & (1 << 6)) != 0 {
-							white
-						} else {
-							black
-						});
+					let pixel = (mono_pixels & 1 << 6) != 0;
+					scan_line_buffer_ptr.offset(1).write(if pixel {
+						white_pair
+					} else {
+						black_pair
+					});
 					// 0b--X-----
-					scan_line_buffer_ptr
-						.offset(2)
-						.write(if (mono_pixels & (1 << 5)) != 0 {
-							white
-						} else {
-							black
-						});
+					let pixel = (mono_pixels & 1 << 5) != 0;
+					scan_line_buffer_ptr.offset(2).write(if pixel {
+						white_pair
+					} else {
+						black_pair
+					});
 					// 0b---X----
-					scan_line_buffer_ptr
-						.offset(3)
-						.write(if (mono_pixels & (1 << 4)) != 0 {
-							white
-						} else {
-							black
-						});
+					let pixel = (mono_pixels & 1 << 4) != 0;
+					scan_line_buffer_ptr.offset(3).write(if pixel {
+						white_pair
+					} else {
+						black_pair
+					});
 					// 0b----X---
-					scan_line_buffer_ptr
-						.offset(4)
-						.write(if (mono_pixels & (1 << 3)) != 0 {
-							white
-						} else {
-							black
-						});
+					let pixel = (mono_pixels & 1 << 3) != 0;
+					scan_line_buffer_ptr.offset(4).write(if pixel {
+						white_pair
+					} else {
+						black_pair
+					});
 					// 0b-----X--
-					scan_line_buffer_ptr
-						.offset(5)
-						.write(if (mono_pixels & (1 << 2)) != 0 {
-							white
-						} else {
-							black
-						});
+					let pixel = (mono_pixels & 1 << 2) != 0;
+					scan_line_buffer_ptr.offset(5).write(if pixel {
+						white_pair
+					} else {
+						black_pair
+					});
 					// 0b------X-
-					scan_line_buffer_ptr
-						.offset(6)
-						.write(if (mono_pixels & (1 << 1)) != 0 {
-							white
-						} else {
-							black
-						});
+					let pixel = (mono_pixels & 1 << 1) != 0;
+					scan_line_buffer_ptr.offset(6).write(if pixel {
+						white_pair
+					} else {
+						black_pair
+					});
 					// 0b-------X
-					scan_line_buffer_ptr
-						.offset(7)
-						.write(if (mono_pixels & 1) == 0 { white } else { black });
+					let pixel = (mono_pixels & 1) != 0;
+					scan_line_buffer_ptr.offset(7).write(if pixel {
+						white_pair
+					} else {
+						black_pair
+					});
 					// move pointer along 16 pixels / 8 pairs
-					scan_line_buffer_ptr = scan_line_buffer_ptr.offset(8);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(8);
 				}
 			}
 		} else {
 			// Non-double-width mode.
 			// eight RGB pixels (four pairs) per byte
 			let attr = Attr::new(
-				TextForegroundColour::WHITE,
-				TextBackgroundColour::BLACK,
+				TextForegroundColour::White,
+				TextBackgroundColour::Black,
 				false,
 			);
-			for b in line_slice {
-				let mono_pixels = *b;
+			for col in 0..line_len_bytes {
+				let mono_pixels = unsafe { line_start.add(col).read() };
 				unsafe {
 					// 0bXX------
 					let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels >> 6);
 					scan_line_buffer_ptr.write(pair);
 					// 0b--XX----
 					let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels >> 4);
-					scan_line_buffer_ptr.offset(1).write(pair);
+					scan_line_buffer_ptr.add(1).write(pair);
 					// 0b----XX--
 					let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels >> 2);
-					scan_line_buffer_ptr.offset(2).write(pair);
+					scan_line_buffer_ptr.add(2).write(pair);
 					// 0b------XX
 					let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels);
-					scan_line_buffer_ptr.offset(3).write(pair);
-					scan_line_buffer_ptr = scan_line_buffer_ptr.offset(4);
+					scan_line_buffer_ptr.add(3).write(pair);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(4);
+				}
+			}
+		}
+	}
+
+	/// Draw a line of 2-bpp bitmap as pixels.
+	///
+	/// Writes into the relevant pixel buffer (either [`PIXEL_DATA_BUFFER_ODD`]
+	/// or [`PIXEL_DATA_BUFFER_EVEN`]) assuming the framebuffer is a bitmap.
+	///
+	/// The `current_line_num` goes from `0..NUM_LINES`.
+	#[link_section = ".data"]
+	pub fn draw_next_line_chunky2(
+		&mut self,
+		scan_line_buffer: &mut LineBuffer,
+		current_line_num: u16,
+	) {
+		let is_double = self.current_video_mode.is_horiz_2x();
+		let base_ptr = self.current_video_ptr as *const u8;
+		let line_len_bytes = self.current_video_mode.line_size_bytes();
+		let offset = usize::from(current_line_num) * line_len_bytes;
+		let line_start = unsafe { base_ptr.add(offset) };
+		// Get a pointer into our scan-line buffer
+		let mut scan_line_buffer_ptr = scan_line_buffer.pixels.as_mut_ptr();
+		let pixel_colours = [
+			RGBColour(VIDEO_PALETTE[0].load(Ordering::Relaxed)),
+			RGBColour(VIDEO_PALETTE[1].load(Ordering::Relaxed)),
+			RGBColour(VIDEO_PALETTE[2].load(Ordering::Relaxed)),
+			RGBColour(VIDEO_PALETTE[3].load(Ordering::Relaxed)),
+		];
+		if is_double {
+			let pixel_pairs = [
+				RGBPair::from_pixels(pixel_colours[0], pixel_colours[0]),
+				RGBPair::from_pixels(pixel_colours[1], pixel_colours[1]),
+				RGBPair::from_pixels(pixel_colours[2], pixel_colours[2]),
+				RGBPair::from_pixels(pixel_colours[3], pixel_colours[3]),
+			];
+			let pixel_pairs_ptr = pixel_pairs.as_ptr();
+			// Double-width mode.
+			// eight RGB pixels (four pairs) per byte
+			for col in 0..line_len_bytes {
+				let chunky_pixels = unsafe { line_start.add(col).read() } as usize;
+				unsafe {
+					let pair = pixel_pairs_ptr.add((chunky_pixels >> 6) & 0x03);
+					scan_line_buffer_ptr.write(*pair);
+					let pair = pixel_pairs_ptr.add((chunky_pixels >> 4) & 0x03);
+					scan_line_buffer_ptr.add(1).write(*pair);
+					let pair = pixel_pairs_ptr.add((chunky_pixels >> 2) & 0x03);
+					scan_line_buffer_ptr.add(2).write(*pair);
+					let pair = pixel_pairs_ptr.add(chunky_pixels & 0x03);
+					scan_line_buffer_ptr.add(3).write(*pair);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(4);
+				}
+			}
+		} else {
+			let pixel_pairs = [
+				RGBPair::from_pixels(pixel_colours[0], pixel_colours[0]),
+				RGBPair::from_pixels(pixel_colours[0], pixel_colours[1]),
+				RGBPair::from_pixels(pixel_colours[0], pixel_colours[2]),
+				RGBPair::from_pixels(pixel_colours[0], pixel_colours[3]),
+				RGBPair::from_pixels(pixel_colours[1], pixel_colours[0]),
+				RGBPair::from_pixels(pixel_colours[1], pixel_colours[1]),
+				RGBPair::from_pixels(pixel_colours[1], pixel_colours[2]),
+				RGBPair::from_pixels(pixel_colours[1], pixel_colours[3]),
+				RGBPair::from_pixels(pixel_colours[2], pixel_colours[0]),
+				RGBPair::from_pixels(pixel_colours[2], pixel_colours[1]),
+				RGBPair::from_pixels(pixel_colours[2], pixel_colours[2]),
+				RGBPair::from_pixels(pixel_colours[2], pixel_colours[3]),
+				RGBPair::from_pixels(pixel_colours[3], pixel_colours[0]),
+				RGBPair::from_pixels(pixel_colours[3], pixel_colours[1]),
+				RGBPair::from_pixels(pixel_colours[3], pixel_colours[2]),
+				RGBPair::from_pixels(pixel_colours[3], pixel_colours[3]),
+			];
+			let pixel_pairs_ptr = pixel_pairs.as_ptr();
+			// Non-double-width mode.
+			// four RGB pixels (two pairs) per byte
+			for col in 0..line_len_bytes {
+				let chunky_pixels = unsafe { line_start.add(col).read() } as usize;
+				unsafe {
+					let pair = pixel_pairs_ptr.add(chunky_pixels >> 4);
+					scan_line_buffer_ptr.write(*pair);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(1);
+					let pair = pixel_pairs_ptr.add(chunky_pixels & 0x0F);
+					scan_line_buffer_ptr.write(*pair);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(1);
+				}
+			}
+		}
+	}
+
+	/// Draw a line of 4-bpp bitmap as pixels.
+	///
+	/// Writes into the relevant pixel buffer (either [`PIXEL_DATA_BUFFER_ODD`]
+	/// or [`PIXEL_DATA_BUFFER_EVEN`]) assuming the framebuffer is a bitmap.
+	///
+	/// The `current_line_num` goes from `0..NUM_LINES`.
+	#[link_section = ".data"]
+	pub fn draw_next_line_chunky4(
+		&mut self,
+		scan_line_buffer: &mut LineBuffer,
+		current_line_num: u16,
+	) {
+		let is_double = self.current_video_mode.is_horiz_2x();
+		let base_ptr = self.current_video_ptr as *const u8;
+		let line_len_bytes = self.current_video_mode.line_size_bytes();
+		let line_start_offset_bytes = usize::from(current_line_num) * line_len_bytes;
+		let line_start_bytes = unsafe { base_ptr.add(line_start_offset_bytes) };
+		// Get a pointer into our scan-line buffer
+		let mut scan_line_buffer_ptr = scan_line_buffer.pixels.as_mut_ptr();
+		let palette_ptr = VIDEO_PALETTE.as_ptr() as *const RGBColour;
+		if is_double {
+			// Double-width mode.
+			// four RGB pixels (two pairs) per byte
+			for col in 0..line_len_bytes {
+				unsafe {
+					let chunky_pixels = line_start_bytes.add(col).read() as usize;
+					let left = palette_ptr.add((chunky_pixels >> 4) & 0x0F).read();
+					let right = palette_ptr.add((chunky_pixels >> 0) & 0x0F).read();
+					scan_line_buffer_ptr.write(RGBPair::from_pixels(left, left));
+					scan_line_buffer_ptr
+						.add(1)
+						.write(RGBPair::from_pixels(right, right));
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(2);
+				}
+			}
+		} else {
+			// Single-width mode - using the interpolator.
+			//
+			// It's able to shift and mask out the 4 bits we want from the
+			// chunky byte, and add the palette pointer, all in a single clock
+			// cycle.
+			//
+			// two RGB pixels (one pair) per byte eight RGB pixels (four pairs)
+			// per word
+
+			// Set up the interpolator. This is safe because core1 has its own.
+			let sio = unsafe { &*rp_pico::pac::SIO::ptr() };
+			sio.interp0_base0.write(|w| {
+				unsafe { w.bits(palette_ptr as u32) };
+				w
+			});
+			sio.interp0_base1.write(|w| {
+				unsafe { w.bits(palette_ptr as u32) };
+				w
+			});
+			// lane0 will pull out the higher of the two 4-bit chunky pixels, but shifted
+			// by 2 bits to account for the 32-bit palette entry
+			sio.interp0_ctrl_lane0.write(|w| {
+				w.shift().variant(4);
+				w.mask_lsb().variant(2);
+				w.mask_msb().variant(5);
+				w
+			});
+			// lane1 will pull out the lower of the two 4-bit chunky pixels, but shifted
+			// by 2 bits to account for the 32-bit palette entry
+			sio.interp0_ctrl_lane1.write(|w| {
+				w.shift().variant(0);
+				w.mask_lsb().variant(2);
+				w.mask_msb().variant(5);
+				w
+			});
+			let line_start_words = line_start_bytes as *const u32;
+			let line_len_words = line_len_bytes / 4;
+			for col in 0..line_len_words {
+				unsafe {
+					let chunky_pixels = line_start_words.add(col).read();
+
+					// First two pixels
+					// Shift up by 2 bits before we load, to account for the 32
+					// bit size of each palette entry.
+					sio.interp0_accum0.write(|w| {
+						w.bits(chunky_pixels << 2);
+						w
+					});
+					sio.interp0_accum1.write(|w| {
+						w.bits(chunky_pixels << 2);
+						w
+					});
+					// now we get the palette address for the left pixel
+					let left_addr = sio.interp0_peek_lane0.read().bits() as usize as *const u16;
+					// and we get the palette address for the right pixel
+					let right_addr = sio.interp0_peek_lane1.read().bits() as usize as *const u16;
+					// read from the palette, pair up, and put in the buffer
+					let pair = RGBPair::from_pixels(RGBColour(*left_addr), RGBColour(*right_addr));
+					scan_line_buffer_ptr.write(pair);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(1);
+
+					// Second two pixels
+					sio.interp0_accum0.write(|w| {
+						w.bits(chunky_pixels >> 6);
+						w
+					});
+					sio.interp0_accum1.write(|w| {
+						w.bits(chunky_pixels >> 6);
+						w
+					});
+					// now we get the palette address for the left pixel
+					let left_addr = sio.interp0_peek_lane0.read().bits() as usize as *const u16;
+					// and we get the palette address for the right pixel
+					let right_addr = sio.interp0_peek_lane1.read().bits() as usize as *const u16;
+					// read from the palette, pair up, and put in the buffer
+					let pair = RGBPair::from_pixels(RGBColour(*left_addr), RGBColour(*right_addr));
+					scan_line_buffer_ptr.write(pair);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(1);
+
+					// Third two pixels
+					sio.interp0_accum0.write(|w| {
+						w.bits(chunky_pixels >> 14);
+						w
+					});
+					sio.interp0_accum1.write(|w| {
+						w.bits(chunky_pixels >> 14);
+						w
+					});
+					// now we get the palette address for the left pixel
+					let left_addr = sio.interp0_peek_lane0.read().bits() as usize as *const u16;
+					// and we get the palette address for the right pixel
+					let right_addr = sio.interp0_peek_lane1.read().bits() as usize as *const u16;
+					// read from the palette, pair up, and put in the buffer
+					let pair = RGBPair::from_pixels(RGBColour(*left_addr), RGBColour(*right_addr));
+					scan_line_buffer_ptr.write(pair);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(1);
+
+					// Fourth two pixels
+					sio.interp0_accum0.write(|w| {
+						w.bits(chunky_pixels >> 22);
+						w
+					});
+					sio.interp0_accum1.write(|w| {
+						w.bits(chunky_pixels >> 22);
+						w
+					});
+					// now we get the palette address for the left pixel
+					let left_addr = sio.interp0_peek_lane0.read().bits() as usize as *const u16;
+					// and we get the palette address for the right pixel
+					let right_addr = sio.interp0_peek_lane1.read().bits() as usize as *const u16;
+					// read from the palette, pair up, and put in the buffer
+					let pair = RGBPair::from_pixels(RGBColour(*left_addr), RGBColour(*right_addr));
+					scan_line_buffer_ptr.write(pair);
+					scan_line_buffer_ptr = scan_line_buffer_ptr.add(1);
 				}
 			}
 		}
@@ -347,7 +619,7 @@ impl RenderEngine {
 		// assume there is good data there and there is enough data there. To
 		// try and avoid Undefined Behaviour, we only access through a pointer
 		// and never make a reference to the data.
-		let fb_ptr = super::video_get_framebuffer() as *const GlyphAttr;
+		let fb_ptr = self.current_video_ptr as *const GlyphAttr;
 		let row_ptr = unsafe { fb_ptr.add(text_row * self.num_text_cols) };
 
 		// Every font look-up we are about to do for this row will
@@ -377,15 +649,15 @@ impl RenderEngine {
 				scan_line_buffer_ptr.write(pair);
 				// 0b--XX----
 				let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels >> 4);
-				scan_line_buffer_ptr.offset(1).write(pair);
+				scan_line_buffer_ptr.add(1).write(pair);
 				// 0b----XX--
 				let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels >> 2);
-				scan_line_buffer_ptr.offset(2).write(pair);
+				scan_line_buffer_ptr.add(2).write(pair);
 				// 0b------XX
 				let pair = TEXT_COLOUR_LOOKUP.lookup(attr, mono_pixels);
-				scan_line_buffer_ptr.offset(3).write(pair);
+				scan_line_buffer_ptr.add(3).write(pair);
 
-				scan_line_buffer_ptr = scan_line_buffer_ptr.offset(4);
+				scan_line_buffer_ptr = scan_line_buffer_ptr.add(4);
 			}
 		}
 	}
@@ -692,26 +964,52 @@ impl TimingBuffer {
 
 /// See [`TEXT_COLOUR_LOOKUP`]
 struct TextColourLookup {
-	entries: [RGBPair; 512],
+	entries: [AtomicU32; 512],
 }
 
 impl TextColourLookup {
+	const FOREGROUND: [TextForegroundColour; 16] = [
+		TextForegroundColour::Black,
+		TextForegroundColour::Blue,
+		TextForegroundColour::Green,
+		TextForegroundColour::Cyan,
+		TextForegroundColour::Red,
+		TextForegroundColour::Magenta,
+		TextForegroundColour::Brown,
+		TextForegroundColour::LightGray,
+		TextForegroundColour::DarkGray,
+		TextForegroundColour::LightBlue,
+		TextForegroundColour::LightGreen,
+		TextForegroundColour::LightCyan,
+		TextForegroundColour::LightRed,
+		TextForegroundColour::Pink,
+		TextForegroundColour::Yellow,
+		TextForegroundColour::White,
+	];
+
+	const BACKGROUND: [TextBackgroundColour; 8] = [
+		TextBackgroundColour::Black,
+		TextBackgroundColour::Blue,
+		TextBackgroundColour::Green,
+		TextBackgroundColour::Cyan,
+		TextBackgroundColour::Red,
+		TextBackgroundColour::Magenta,
+		TextBackgroundColour::Brown,
+		TextBackgroundColour::LightGray,
+	];
+
 	const fn blank() -> TextColourLookup {
+		#[allow(clippy::declare_interior_mutable_const)]
+		const ZERO: AtomicU32 = AtomicU32::new(0);
 		TextColourLookup {
-			entries: [RGBPair::new(); 512],
+			entries: [ZERO; 512],
 		}
 	}
 
-	fn init(&mut self, palette: &[AtomicU16]) {
-		for (fg, fg_colour) in palette.iter().take(16).enumerate() {
-			for (bg, bg_colour) in palette.iter().take(8).enumerate() {
-				let attr = unsafe {
-					Attr::new(
-						TextForegroundColour::new_unchecked(fg as u8),
-						TextBackgroundColour::new_unchecked(bg as u8),
-						false,
-					)
-				};
+	fn init(&self, palette: &[AtomicU16]) {
+		for (fg, fg_colour) in Self::FOREGROUND.iter().zip(palette.iter()) {
+			for (bg, bg_colour) in Self::BACKGROUND.iter().zip(palette.iter()) {
+				let attr = Attr::new(*fg, *bg, false);
 				for pixels in 0..=3 {
 					let index: usize = (((attr.0 & 0x7F) as usize) << 2) | (pixels & 0x03) as usize;
 					let pair = RGBPair::from_pixels(
@@ -726,7 +1024,41 @@ impl TextColourLookup {
 							RGBColour(bg_colour.load(Ordering::Relaxed))
 						},
 					);
-					self.entries[index] = pair;
+					self.entries[index].store(pair.0, Ordering::Relaxed);
+				}
+			}
+		}
+	}
+
+	fn update_index(&self, updated_palette_entry: u8, palette: &[AtomicU16]) {
+		for (fg, (fg_colour_idx, fg_colour)) in
+			Self::FOREGROUND.iter().zip(palette.iter().enumerate())
+		{
+			for (bg, (bg_colour_idx, bg_colour)) in
+				Self::BACKGROUND.iter().zip(palette.iter().enumerate())
+			{
+				if fg_colour_idx != usize::from(updated_palette_entry)
+					&& bg_colour_idx != usize::from(updated_palette_entry)
+				{
+					// skip this one - it didn't change
+					continue;
+				}
+				let attr = Attr::new(*fg, *bg, false);
+				for pixels in 0..=3 {
+					let index: usize = (((attr.0 & 0x7F) as usize) << 2) | (pixels & 0x03) as usize;
+					let pair = RGBPair::from_pixels(
+						if pixels & 0x02 == 0x02 {
+							RGBColour(fg_colour.load(Ordering::Relaxed))
+						} else {
+							RGBColour(bg_colour.load(Ordering::Relaxed))
+						},
+						if pixels & 0x01 == 0x01 {
+							RGBColour(fg_colour.load(Ordering::Relaxed))
+						} else {
+							RGBColour(bg_colour.load(Ordering::Relaxed))
+						},
+					);
+					self.entries[index].store(pair.0, Ordering::Relaxed);
 				}
 			}
 		}
@@ -735,9 +1067,31 @@ impl TextColourLookup {
 	#[inline]
 	fn lookup(&self, attr: Attr, pixels: u8) -> RGBPair {
 		let index: usize = (((attr.0 & 0x7F) as usize) << 2) | (pixels & 0x03) as usize;
-		unsafe { core::ptr::read(self.entries.as_ptr().add(index)) }
+		RGBPair(self.entries[index].load(Ordering::Relaxed))
 	}
 }
+
+/// Holds a screen full of characters and colour attributes.
+///
+/// It is 32-bit (4 byte) aligned.
+#[repr(align(4))]
+pub struct TextBuffer {
+	inner: UnsafeCell<[GlyphAttr; MAX_TEXT_COLS * MAX_TEXT_ROWS]>,
+}
+
+impl TextBuffer {
+	const fn new() -> TextBuffer {
+		TextBuffer {
+			inner: UnsafeCell::new([GlyphAttr(0); MAX_TEXT_COLS * MAX_TEXT_ROWS]),
+		}
+	}
+
+	pub fn as_ptr(&self) -> *mut GlyphAttr {
+		self.inner.get() as _
+	}
+}
+
+unsafe impl Sync for TextBuffer {}
 
 // -----------------------------------------------------------------------------
 // Static and Const Data
@@ -762,26 +1116,23 @@ pub const MAX_TEXT_ROWS: usize = MAX_NUM_LINES / 8;
 /// This is our text buffer.
 ///
 /// This is arranged as `MAX_TEXT_ROWS` rows of `MAX_TEXT_COLS` columns. Each
-/// item is an index into `font16::FONT_DATA` plus an 8-bit attribute.
+/// item is an index into the font data, and an 8-bit colour attribute for that
+/// cell.
 ///
 /// Written to by Core 0, and read from by `RenderEngine` running on Core 1.
-pub static mut GLYPH_ATTR_ARRAY: [GlyphAttr; MAX_TEXT_COLS * MAX_TEXT_ROWS] =
-	[GlyphAttr(0); MAX_TEXT_COLS * MAX_TEXT_ROWS];
+pub static GLYPH_ATTR_ARRAY: TextBuffer = TextBuffer::new();
 
-/// Stores our current video mode, or the mode we change into on the next frame.
+/// Stores our current video mode.
 ///
-/// We boot in 80x30 mode.
-pub static VIDEO_MODE: AtomicModeWrapper = AtomicModeWrapper::new(crate::common::video::Mode::new(
-	crate::common::video::Timing::T640x480,
-	crate::common::video::Format::Text8x16,
-));
+/// Copied at the start of every frame by the code on Core 1.
+pub static VIDEO_MODE: VideoMode = VideoMode::new();
 
 /// Holds the 256-entry palette for indexed colour modes.
 ///
 /// Note, the first eight entries should match
 /// [`neotron_common_bios::video::TextBackgroundColour`] and the first 16 entries
 /// should match [`neotron_common_bios::video::TextForegroundColour`].
-pub static VIDEO_PALETTE: [AtomicU16; 256] = [
+static VIDEO_PALETTE: [AtomicU16; 256] = [
 	// Index 000: 0x000 (Black)
 	AtomicU16::new(RGBColour::from_12bit(0x0, 0x0, 0x0).0),
 	// Index 001: 0x00a (Blue)
@@ -1359,12 +1710,7 @@ static mut PIXEL_DATA_BUFFER_ODD: LineBuffer = LineBuffer {
 /// | FG3 | FG2 | FG1 | FG0 | BG2 | BG1 | BG0 | PX1 | PX0 |
 /// +-----+-----+-----+-----+-----+-----+-----+-----+-----+
 /// ```
-static mut TEXT_COLOUR_LOOKUP: TextColourLookup = TextColourLookup::blank();
-
-/// Stores a custom framebuffer pointer provided by the OS.
-///
-/// Defaults to null, which means we use our internal text buffer.
-pub(crate) static CUSTOM_FB: AtomicPtr<u8> = AtomicPtr::new(core::ptr::null_mut());
+static TEXT_COLOUR_LOOKUP: TextColourLookup = TextColourLookup::blank();
 
 // -----------------------------------------------------------------------------
 // Functions
@@ -1379,7 +1725,7 @@ pub fn init(
 	dma: super::pac::DMA,
 	resets: &mut super::pac::RESETS,
 	ppb: &mut crate::pac::PPB,
-	fifo: &mut rp_pico::hal::sio::SioFifo,
+	fifo: &mut hal::sio::SioFifo,
 	psm: &mut crate::pac::PSM,
 ) {
 	// Grab PIO0 and the state machines it contains
@@ -1470,18 +1816,14 @@ pub fn init(
 	// very similar idea to me, but wrote it up far better than I ever could.
 
 	let timing_installed = pio.install(&timing_program.program).unwrap();
-	let (mut timing_sm, _, timing_fifo) =
-		rp_pico::hal::pio::PIOBuilder::from_program(timing_installed)
-			.buffers(rp_pico::hal::pio::Buffers::OnlyTx)
-			.out_pins(0, 2) // H-Sync is GPIO0, V-Sync is GPIO1
-			.autopull(true)
-			.out_shift_direction(rp_pico::hal::pio::ShiftDirection::Right)
-			.pull_threshold(32)
-			.build(sm0);
-	timing_sm.set_pindirs([
-		(0, rp_pico::hal::pio::PinDir::Output),
-		(1, rp_pico::hal::pio::PinDir::Output),
-	]);
+	let (mut timing_sm, _, timing_fifo) = hal::pio::PIOBuilder::from_program(timing_installed)
+		.buffers(hal::pio::Buffers::OnlyTx)
+		.out_pins(0, 2) // H-Sync is GPIO0, V-Sync is GPIO1
+		.autopull(true)
+		.out_shift_direction(hal::pio::ShiftDirection::Right)
+		.pull_threshold(32)
+		.build(sm0);
+	timing_sm.set_pindirs([(0, hal::pio::PinDir::Output), (1, hal::pio::PinDir::Output)]);
 
 	// Important notes!
 	//
@@ -1491,15 +1833,14 @@ pub fn init(
 	// each line differs by some number of 151.2 MHz clock cycles).
 
 	let pixels_installed = pio.install(&pixel_program.program).unwrap();
-	let (mut pixel_sm, _, pixel_fifo) =
-		rp_pico::hal::pio::PIOBuilder::from_program(pixels_installed)
-			.buffers(rp_pico::hal::pio::Buffers::OnlyTx)
-			.out_pins(2, 12) // Red0 is GPIO2, Blue3 is GPIO13
-			.autopull(true)
-			.out_shift_direction(rp_pico::hal::pio::ShiftDirection::Right)
-			.pull_threshold(32) // We read all 32-bits in each FIFO word
-			.build(sm1);
-	pixel_sm.set_pindirs((2..=13).map(|x| (x, rp_pico::hal::pio::PinDir::Output)));
+	let (mut pixel_sm, _, pixel_fifo) = hal::pio::PIOBuilder::from_program(pixels_installed)
+		.buffers(hal::pio::Buffers::OnlyTx)
+		.out_pins(2, 12) // Red0 is GPIO2, Blue3 is GPIO13
+		.autopull(true)
+		.out_shift_direction(hal::pio::ShiftDirection::Right)
+		.pull_threshold(32) // We read all 32-bits in each FIFO word
+		.build(sm1);
+	pixel_sm.set_pindirs((2..=13).map(|x| (x, hal::pio::PinDir::Output)));
 
 	pio.irq1().enable_sm_interrupt(1);
 
@@ -1577,9 +1918,7 @@ pub fn init(
 	);
 
 	// No-one else is looking at this right now.
-	unsafe {
-		TEXT_COLOUR_LOOKUP.init(&VIDEO_PALETTE);
-	}
+	TEXT_COLOUR_LOOKUP.init(&VIDEO_PALETTE);
 
 	crate::multicore::launch_core1_with_stack(
 		core1_main,
@@ -1593,22 +1932,39 @@ pub fn init(
 }
 
 /// Gets the current video mode
-pub fn get_video_mode() -> crate::common::video::Mode {
-	VIDEO_MODE.get_mode()
+pub fn get_video_mode() -> neotron_common_bios::video::Mode {
+	VIDEO_MODE.get_mode().mode
+}
+
+/// Get the current framebuffer pointer
+pub fn get_framebuffer() -> *mut u32 {
+	VIDEO_MODE.get_mode().ptr
 }
 
 /// Sets the current video mode
-pub fn set_video_mode(mode: crate::common::video::Mode) -> bool {
+pub fn set_video_mode(mode: neotron_common_bios::video::Mode, vram: *mut u32) -> bool {
 	if test_video_mode(mode) {
-		VIDEO_MODE.set_mode(mode);
+		if mode_needs_vram(mode) && vram.is_null() {
+			defmt::info!("mode {=u8} needs vram", mode.as_u8());
+			return false;
+		}
+		defmt::info!("video mode is OK");
+		VIDEO_MODE.set_mode(ModeInfo { mode, ptr: vram });
 		true
 	} else {
+		defmt::info!("mode {=u8} is bad", mode.as_u8());
 		false
 	}
 }
 
+/// Check if the given video mode needs more RAM that we have by default
+pub fn mode_needs_vram(mode: neotron_common_bios::video::Mode) -> bool {
+	let ram_required = mode.frame_size_bytes();
+	ram_required > core::mem::size_of_val(&GLYPH_ATTR_ARRAY)
+}
+
 /// Check the given video mode is allowable
-pub fn test_video_mode(mode: crate::common::video::Mode) -> bool {
+pub fn test_video_mode(mode: neotron_common_bios::video::Mode) -> bool {
 	matches!(
 		(
 			mode.timing(),
@@ -1617,15 +1973,21 @@ pub fn test_video_mode(mode: crate::common::video::Mode) -> bool {
 			mode.is_vert_2x(),
 		),
 		(
-			crate::common::video::Timing::T640x480 | crate::common::video::Timing::T640x400,
-			crate::common::video::Format::Text8x16
-				| crate::common::video::Format::Text8x8
-				| crate::common::video::Format::Chunky1,
+			neotron_common_bios::video::Timing::T640x480
+				| neotron_common_bios::video::Timing::T640x400,
+			neotron_common_bios::video::Format::Text8x16
+				| neotron_common_bios::video::Format::Text8x8
+				| neotron_common_bios::video::Format::Chunky1
+				| neotron_common_bios::video::Format::Chunky2
+				| neotron_common_bios::video::Format::Chunky4,
 			false,
 			false,
 		) | (
-			crate::common::video::Timing::T640x480 | crate::common::video::Timing::T640x400,
-			crate::common::video::Format::Chunky1,
+			neotron_common_bios::video::Timing::T640x480
+				| neotron_common_bios::video::Timing::T640x400,
+			neotron_common_bios::video::Format::Chunky1
+				| neotron_common_bios::video::Format::Chunky2
+				| neotron_common_bios::video::Format::Chunky4,
 			true,
 			false,
 		)
@@ -1641,6 +2003,21 @@ pub fn get_scan_line() -> u16 {
 pub fn get_num_scan_lines() -> u16 {
 	let mode = get_video_mode();
 	mode.vertical_lines()
+}
+
+/// Set a palette entry
+pub fn set_palette(index: u8, colour: RGBColour) {
+	// Store it
+	VIDEO_PALETTE[index as usize].store(colour.0, Ordering::Relaxed);
+	// Update the text cache
+	if index <= 15 {
+		TEXT_COLOUR_LOOKUP.update_index(index, &VIDEO_PALETTE);
+	}
+}
+
+/// Get a palette entry
+pub fn get_palette(index: u8) -> RGBColour {
+	RGBColour(VIDEO_PALETTE[index as usize].load(Ordering::Relaxed))
 }
 
 /// This function runs the video processing loop on Core 1.

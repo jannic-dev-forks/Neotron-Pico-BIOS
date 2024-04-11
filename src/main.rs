@@ -60,36 +60,35 @@ mod vga;
 
 // Standard Library Stuff
 use core::{
-	convert::TryFrom,
+	convert::{TryFrom, TryInto},
 	fmt::Write,
 	sync::atomic::{AtomicBool, AtomicU32, Ordering},
 };
 
 // Third Party Stuff
-use cortex_m_rt::entry;
 use defmt::info;
 use defmt_rtt as _;
 use ds1307::{Datelike, NaiveDateTime, Timelike};
 use embedded_hal::{
-	blocking::i2c::{WriteIter as _I2cWriteIter, WriteIterRead as _I2cWriteIterRead},
+	blocking::i2c::{
+		Read as _I2cRead, WriteIter as _I2cWriteIter, WriteIterRead as _I2cWriteIterRead,
+	},
 	blocking::spi::{Transfer as _SpiTransfer, Write as _SpiWrite},
 	digital::v2::{InputPin, OutputPin},
 };
 use fugit::RateExtU32;
 use panic_probe as _;
 use pc_keyboard::{KeyCode, ScancodeSet};
-use rp_pico::{
-	self,
-	hal::{
-		self,
-		clocks::ClocksManager,
-		gpio::{
-			bank0::{self, Gpio16, Gpio18, Gpio19},
-			FunctionPio0, FunctionPio1, FunctionSioOutput, FunctionSpi, Pin, PullNone,
-		},
-		pac::{self, interrupt},
-		Clock,
+use rp2040_hal::{
+	self as hal,
+	clocks::ClocksManager,
+	entry,
+	gpio::{
+		bank0::{self, Gpio16, Gpio18, Gpio19},
+		FunctionPio0, FunctionPio1, FunctionSioOutput, FunctionSpi, Pin, PullNone,
 	},
+	pac::{self, interrupt},
+	Clock,
 };
 
 // Other Neotron Crates
@@ -111,11 +110,11 @@ use neotron_common_bios::{
 type Duration = fugit::Duration<u64, 1, 1_000_000>;
 
 /// The type of our IRQ input pin from the MCP23S17.
-type IrqPin = Pin<bank0::Gpio20, rp_pico::hal::gpio::FunctionSioInput, rp_pico::hal::gpio::PullUp>;
+type IrqPin = Pin<bank0::Gpio20, hal::gpio::FunctionSioInput, hal::gpio::PullUp>;
 
 type I2cPins = (
-	Pin<bank0::Gpio14, rp_pico::hal::gpio::FunctionI2C, rp_pico::hal::gpio::PullNone>,
-	Pin<bank0::Gpio15, rp_pico::hal::gpio::FunctionI2C, rp_pico::hal::gpio::PullNone>,
+	Pin<bank0::Gpio14, hal::gpio::FunctionI2C, hal::gpio::PullNone>,
+	Pin<bank0::Gpio15, hal::gpio::FunctionI2C, hal::gpio::PullNone>,
 );
 
 type SpiBus = hal::Spi<
@@ -293,7 +292,6 @@ static API_CALLS: common::Api = common::Api {
 	video_set_mode,
 	video_get_mode,
 	video_get_framebuffer,
-	video_set_framebuffer,
 	memory_get_region,
 	video_mode_needs_vram,
 	hid_get_event,
@@ -447,10 +445,6 @@ fn main() -> ! {
 
 	info!("Clocks OK");
 
-	info!("SCKDV: {}", unsafe {
-		(*rp_pico::pac::XIP_SSI::ptr()).baudr.read().bits()
-	});
-
 	// sio is the *Single-cycle Input/Output* peripheral. It has all our GPIO
 	// pins, as well as some mailboxes and other useful things for inter-core
 	// communications.
@@ -598,11 +592,13 @@ fn sign_on() {
 
 	// Create a new temporary console for some boot-up messages
 	let tc = console::TextConsole::new();
-	tc.set_text_buffer(unsafe { &mut vga::GLYPH_ATTR_ARRAY });
+	unsafe {
+		tc.set_text_buffer(vga::GLYPH_ATTR_ARRAY.as_ptr());
+	}
 
 	tc.change_attr(Attr::new(
-		TextForegroundColour::WHITE,
-		TextBackgroundColour::BLUE,
+		TextForegroundColour::White,
+		TextBackgroundColour::Blue,
 		false,
 	));
 
@@ -619,8 +615,8 @@ fn sign_on() {
 	}
 
 	tc.change_attr(Attr::new(
-		TextForegroundColour::WHITE,
-		TextBackgroundColour::BLUE,
+		TextForegroundColour::White,
+		TextBackgroundColour::Blue,
 		false,
 	));
 
@@ -628,8 +624,8 @@ fn sign_on() {
 
 	// Draw the BIOS version
 	tc.change_attr(Attr::new(
-		TextForegroundColour::YELLOW,
-		TextBackgroundColour::BLACK,
+		TextForegroundColour::Yellow,
+		TextBackgroundColour::Black,
 		false,
 	));
 	tc.move_to(12, 6);
@@ -644,8 +640,8 @@ fn sign_on() {
 	// Draw the BMC version
 	tc.move_to(13, 6);
 	tc.change_attr(Attr::new(
-		TextForegroundColour::WHITE,
-		TextBackgroundColour::RED,
+		TextForegroundColour::White,
+		TextBackgroundColour::Red,
 		false,
 	));
 	let bmc_ver = {
@@ -670,8 +666,8 @@ fn sign_on() {
 	}
 
 	tc.change_attr(Attr::new(
-		TextForegroundColour::WHITE,
-		TextBackgroundColour::BLUE,
+		TextForegroundColour::White,
+		TextBackgroundColour::Blue,
 		false,
 	));
 
@@ -841,12 +837,12 @@ impl Hardware {
 		watchdog: hal::Watchdog,
 		resets: &mut pac::RESETS,
 	) -> (Hardware, IrqPin) {
-		let hal_pins = rp_pico::Pins::new(bank, pads, sio, resets);
+		let hal_pins = hal::gpio::Pins::new(bank, pads, sio, resets);
 		// We construct the pin here and then throw it away. Then Core 1 does
 		// some unsafe writes to the GPIO_SET/GPIO_CLEAR registers to set/clear
 		// pin 25 to track render loop timing. This avoids trying to 'move' the pin
 		// over to Core 1.
-		let _pico_led = hal_pins.led.into_push_pull_output();
+		let _pico_led = hal_pins.gpio25.into_push_pull_output();
 		let raw_i2c = hal::i2c::I2C::i2c1(
 			i2c,
 			{
@@ -866,7 +862,21 @@ impl Hardware {
 			&clocks.system_clock,
 		);
 		let i2c = shared_bus::BusManagerSimple::new(raw_i2c);
-		let proxy = i2c.acquire_i2c();
+		let mut proxy = i2c.acquire_i2c();
+
+		defmt::info!("Probing I2C bus...");
+		for test_address in 0x09..=0x77 {
+			let mut readbuf: [u8; 1] = [0; 1];
+			match proxy.read(test_address, &mut readbuf) {
+				Ok(_) => {
+					defmt::info!("{:02x} found <<<<", test_address);
+				}
+				Err(_) => {
+					defmt::info!("{:02x} missing", test_address);
+				}
+			}
+		}
+
 		let mut external_rtc = rtc::Rtc::new(proxy);
 		let timer = hal::timer::Timer::new(timer, resets, &clocks);
 		// Do a conversion from external RTC time (chrono::NaiveDateTime) to a format we can track
@@ -895,7 +905,7 @@ impl Hardware {
 		let pins = Pins {
 			// Disable power save mode to force SMPS into low-efficiency, low-noise mode.
 			npower_save: {
-				let mut pin = hal_pins.b_power_save.reconfigure();
+				let mut pin = hal_pins.gpio23.reconfigure();
 				pin.set_high().unwrap();
 				pin
 			},
@@ -1023,7 +1033,7 @@ impl Hardware {
 			tlv320aic23::DataFormat::I2s,
 		);
 		let audio_config = common::audio::Config {
-			sample_format: common::audio::SampleFormat::SixteenBitStereo,
+			sample_format: common::audio::SampleFormat::SixteenBitStereo.into(),
 			sample_rate_hz: 48000,
 		};
 		if let Err(hal::i2c::Error::Abort(code)) = audio_codec.sync(&mut i2c.acquire_i2c()) {
@@ -1773,11 +1783,11 @@ pub extern "C" fn configuration_get(mut buffer: FfiBuffer) -> ApiResult<usize> {
 		}
 		Err(rtc::Error::DriverBug) => {
 			defmt::warn!("Can't get config - Driver Bug");
-			ApiResult::Err(CError::DeviceError(0))
+			ApiResult::Err(CError::DeviceError)
 		}
 		Err(rtc::Error::Bus(e)) => {
 			defmt::warn!("Can't get config - bus error {:?}", e);
-			ApiResult::Err(CError::DeviceError(1))
+			ApiResult::Err(CError::DeviceError)
 		}
 	}
 }
@@ -1800,11 +1810,11 @@ pub extern "C" fn configuration_set(buffer: FfiByteSlice) -> ApiResult<()> {
 		}
 		Err(rtc::Error::DriverBug) => {
 			defmt::warn!("Can't save config - Driver Bug");
-			ApiResult::Err(CError::DeviceError(0))
+			ApiResult::Err(CError::DeviceError)
 		}
 		Err(rtc::Error::Bus(e)) => {
 			defmt::warn!("Can't save config - bus error {:?}", e);
-			ApiResult::Err(CError::DeviceError(0))
+			ApiResult::Err(CError::DeviceError)
 		}
 	}
 }
@@ -1818,17 +1828,18 @@ pub extern "C" fn video_is_valid_mode(mode: common::video::Mode) -> bool {
 ///
 /// The contents of the screen are undefined after a call to this function.
 ///
-/// If the BIOS does not have enough reserved RAM (or dedicated VRAM) to
-/// support this mode, the change will succeed but a subsequent call to
-/// `video_get_framebuffer` will return `null`. You must then supply a
-/// pointer to a block of size `Mode::frame_size_bytes()` to
-/// `video_set_framebuffer` before any video will appear.
-pub extern "C" fn video_set_mode(mode: common::video::Mode) -> ApiResult<()> {
-	defmt::info!("Changing to mode {}", mode.as_u8());
-	if vga::set_video_mode(mode) {
+/// If `video_mode_needs_vram(mode)` returns true, you will get garbage until
+/// you supply a bigger framebuffer.
+pub extern "C" fn video_set_mode(mode: common::video::Mode, vram: *mut u32) -> ApiResult<()> {
+	defmt::info!(
+		"Changing to mode {=u8}, ptr {=u32:#x}",
+		mode.as_u8(),
+		vram as u32
+	);
+	if vga::set_video_mode(mode, vram) {
 		ApiResult::Ok(())
 	} else {
-		ApiResult::Err(CError::UnsupportedConfiguration(0))
+		ApiResult::Err(CError::UnsupportedConfiguration)
 	}
 }
 
@@ -1847,43 +1858,18 @@ pub extern "C" fn video_get_mode() -> common::video::Mode {
 /// meaning of the data we write, and the size of the region we are
 /// allowed to write to, is a function of the current video mode (see
 /// `video_get_mode`).
-///
-/// This function will return `null` if the BIOS isn't able to support the
-/// current video mode from its memory reserves. If that happens, you will
-/// need to use some OS RAM or Application RAM and provide that as a
-/// framebuffer to `video_set_framebuffer`. The BIOS will always be able
-/// to provide the 'basic' text buffer experience from reserves, so this
-/// function will never return `null` on start-up.
-pub extern "C" fn video_get_framebuffer() -> *mut u8 {
-	let ptr = vga::CUSTOM_FB.load(Ordering::Relaxed);
-	if ptr.is_null() {
-		unsafe { vga::GLYPH_ATTR_ARRAY.as_mut_ptr() as *mut u8 }
-	} else {
-		ptr
-	}
+pub extern "C" fn video_get_framebuffer() -> *mut u32 {
+	vga::get_framebuffer()
 }
 
-/// Set the framebuffer address.
+/// Find out whether the given video mode needs more VRAM than is available by
+/// default.
 ///
-/// Tell the BIOS where it should start fetching pixel or textual data from
-/// (depending on the current video mode).
-///
-/// This value is forgotten after a video mode change and must be re-supplied.
-///
-/// # Safety
-///
-/// The pointer must point to enough video memory to handle the current video
-/// mode, and any future video mode you set.
-pub unsafe extern "C" fn video_set_framebuffer(buffer: *const u8) -> ApiResult<()> {
-	vga::CUSTOM_FB.store(buffer as *mut u8, Ordering::Relaxed);
-	ApiResult::Ok(())
-}
-
-/// Find out whether the given video mode needs more VRAM than we currently have.
-///
-/// The answer is no for any currently supported video mode (which is just the four text modes right now).
-pub extern "C" fn video_mode_needs_vram(_mode: common::video::Mode) -> bool {
-	false
+/// If this returns true, you need to call `video_set_framebuffer` and pass in a
+/// block of RAM to use as a framebuffer. Each mode has a known, fixed, RAM
+/// requirement.
+pub extern "C" fn video_mode_needs_vram(mode: common::video::Mode) -> bool {
+	vga::mode_needs_vram(mode)
 }
 
 /// Find out how large a given region of memory is.
@@ -1911,7 +1897,7 @@ pub extern "C" fn memory_get_region(region: u8) -> FfiOption<common::MemoryRegio
 			FfiOption::Some(MemoryRegion {
 				start: unsafe { &mut _ram_os_start as *mut u32 } as *mut u8,
 				length: unsafe { &mut _ram_os_len as *const u32 } as usize,
-				kind: common::MemoryKind::Ram,
+				kind: common::MemoryKind::Ram.into(),
 			})
 		}
 		_ => FfiOption::None,
@@ -2060,8 +2046,7 @@ pub extern "C" fn video_wait_for_line(line: u16) {
 
 /// Read the RGB palette.
 extern "C" fn video_get_palette(index: u8) -> FfiOption<common::video::RGBColour> {
-	let raw_u16 = vga::VIDEO_PALETTE[index as usize].load(Ordering::Relaxed);
-	let our_colour = vga::RGBColour(raw_u16);
+	let our_colour = vga::get_palette(index);
 	// Convert from our 12-bit colour type to the public 24-bit colour type
 	FfiOption::Some(our_colour.into())
 }
@@ -2070,8 +2055,7 @@ extern "C" fn video_get_palette(index: u8) -> FfiOption<common::video::RGBColour
 extern "C" fn video_set_palette(index: u8, rgb: common::video::RGBColour) {
 	// Convert from their 24-bit colour type to our 12-bit colour type
 	let our_colour: vga::RGBColour = rgb.into();
-	// Store it
-	vga::VIDEO_PALETTE[index as usize].store(our_colour.0, Ordering::Relaxed);
+	vga::set_palette(index, our_colour);
 }
 
 /// Update all the RGB palette
@@ -2123,7 +2107,7 @@ extern "C" fn i2c_write_read(
 				Ok(()) => ApiResult::Ok(()),
 				Err(e) => {
 					defmt::warn!("Error executing I2C: {:?}", e);
-					ApiResult::Err(CError::DeviceError(0))
+					ApiResult::Err(CError::DeviceError)
 				}
 			}
 		}
@@ -2144,43 +2128,43 @@ extern "C" fn audio_mixer_channel_get_info(
 	match audio_mixer_id {
 		0 => FfiOption::Some(common::audio::MixerChannelInfo {
 			name: common::FfiString::new("LeftOut"),
-			direction: common::audio::Direction::Output,
+			direction: common::audio::Direction::Output.into(),
 			max_level: 79,
 			current_level: hw.audio_codec.get_headphone_output_volume().0,
 		}),
 		1 => FfiOption::Some(common::audio::MixerChannelInfo {
 			name: common::FfiString::new("RightOut"),
-			direction: common::audio::Direction::Output,
+			direction: common::audio::Direction::Output.into(),
 			max_level: 79,
 			current_level: hw.audio_codec.get_headphone_output_volume().1,
 		}),
 		2 => FfiOption::Some(common::audio::MixerChannelInfo {
 			name: common::FfiString::new("LeftIn"),
-			direction: common::audio::Direction::Input,
+			direction: common::audio::Direction::Input.into(),
 			max_level: 31,
 			current_level: hw.audio_codec.get_line_input_volume_steps().0,
 		}),
 		3 => FfiOption::Some(common::audio::MixerChannelInfo {
 			name: common::FfiString::new("RightIn"),
-			direction: common::audio::Direction::Input,
+			direction: common::audio::Direction::Input.into(),
 			max_level: 31,
 			current_level: hw.audio_codec.get_line_input_volume_steps().1,
 		}),
 		4 => FfiOption::Some(common::audio::MixerChannelInfo {
 			name: common::FfiString::new("LeftInMute"),
-			direction: common::audio::Direction::Input,
+			direction: common::audio::Direction::Input.into(),
 			max_level: 1,
 			current_level: hw.audio_codec.get_line_input_mute().0 as u8,
 		}),
 		5 => FfiOption::Some(common::audio::MixerChannelInfo {
 			name: common::FfiString::new("RightInMute"),
-			direction: common::audio::Direction::Input,
+			direction: common::audio::Direction::Input.into(),
 			max_level: 1,
 			current_level: hw.audio_codec.get_line_input_mute().1 as u8,
 		}),
 		6 => FfiOption::Some(common::audio::MixerChannelInfo {
 			name: common::FfiString::new("Sidetone"),
-			direction: common::audio::Direction::Output,
+			direction: common::audio::Direction::Output.into(),
 			max_level: 5,
 			current_level: match hw.audio_codec.get_sidetone_level() {
 				tlv320aic23::Sidetone::ZeroDb => 5,
@@ -2193,37 +2177,37 @@ extern "C" fn audio_mixer_channel_get_info(
 		}),
 		7 => FfiOption::Some(common::audio::MixerChannelInfo {
 			name: common::FfiString::new("MicEnable"),
-			direction: common::audio::Direction::Input,
+			direction: common::audio::Direction::Input.into(),
 			max_level: 1,
 			current_level: hw.audio_codec.get_audio_input() as u8,
 		}),
 		8 => FfiOption::Some(common::audio::MixerChannelInfo {
 			name: common::FfiString::new("MicBoost"),
-			direction: common::audio::Direction::Input,
+			direction: common::audio::Direction::Input.into(),
 			max_level: 1,
 			current_level: hw.audio_codec.get_microphone_boost() as u8,
 		}),
 		9 => FfiOption::Some(common::audio::MixerChannelInfo {
 			name: common::FfiString::new("MicMute"),
-			direction: common::audio::Direction::Input,
+			direction: common::audio::Direction::Input.into(),
 			max_level: 1,
 			current_level: hw.audio_codec.get_microphone_mute() as u8,
 		}),
 		10 => FfiOption::Some(common::audio::MixerChannelInfo {
 			name: common::FfiString::new("Bypass"),
-			direction: common::audio::Direction::Input,
+			direction: common::audio::Direction::Input.into(),
 			max_level: 1,
 			current_level: hw.audio_codec.get_bypass() as u8,
 		}),
 		11 => FfiOption::Some(common::audio::MixerChannelInfo {
 			name: common::FfiString::new("DacEnable"),
-			direction: common::audio::Direction::Output,
+			direction: common::audio::Direction::Output.into(),
 			max_level: 1,
 			current_level: hw.audio_codec.get_dac_selected() as u8,
 		}),
 		12 => FfiOption::Some(common::audio::MixerChannelInfo {
 			name: common::FfiString::new("DacMute"),
-			direction: common::audio::Direction::Output,
+			direction: common::audio::Direction::Output.into(),
 			max_level: 1,
 			current_level: hw.audio_codec.get_dac_mute() as u8,
 		}),
@@ -2240,7 +2224,7 @@ extern "C" fn audio_mixer_channel_set_level(audio_mixer_id: u8, level: u8) -> Ap
 	let hw = lock.as_mut().unwrap();
 
 	if level > info.max_level {
-		return ApiResult::Err(neotron_common_bios::Error::UnsupportedConfiguration(0));
+		return ApiResult::Err(neotron_common_bios::Error::UnsupportedConfiguration);
 	}
 
 	use tlv320aic23::Channel;
@@ -2288,7 +2272,7 @@ extern "C" fn audio_mixer_channel_set_level(audio_mixer_id: u8, level: u8) -> Ap
 	if hw.audio_codec.sync(&mut hw.i2c.acquire_i2c()).is_ok() {
 		neotron_common_bios::FfiResult::Ok(())
 	} else {
-		ApiResult::Err(neotron_common_bios::Error::DeviceError(0))
+		ApiResult::Err(neotron_common_bios::Error::DeviceError)
 	}
 }
 
@@ -2296,13 +2280,15 @@ extern "C" fn audio_output_set_config(config: common::audio::Config) -> ApiResul
 	// We can't support 8-bit samples with this CODEC. See `audio_output_data`
 	// if you add any more supported sample formats, so the playback routine
 	// does the right thing.
-	match config.sample_format {
-		common::audio::SampleFormat::SixteenBitStereo
-		| common::audio::SampleFormat::SixteenBitMono => {
+	match config.sample_format.try_into() {
+		Ok(
+			common::audio::SampleFormat::SixteenBitStereo
+			| common::audio::SampleFormat::SixteenBitMono,
+		) => {
 			// Format Ok
 		}
 		_ => {
-			return ApiResult::Err(CError::UnsupportedConfiguration(0));
+			return ApiResult::Err(CError::UnsupportedConfiguration);
 		}
 	}
 	let sample_rate = match config.sample_rate_hz {
@@ -2311,7 +2297,7 @@ extern "C" fn audio_output_set_config(config: common::audio::Config) -> ApiResul
 		32000 => tlv320aic23::CONFIG_USB_32K,
 		8000 => tlv320aic23::CONFIG_USB_8K,
 		_ => {
-			return ApiResult::Err(CError::UnsupportedConfiguration(1));
+			return ApiResult::Err(CError::UnsupportedConfiguration);
 		}
 	};
 	let mut lock = HARDWARE.lock();
@@ -2340,11 +2326,11 @@ unsafe extern "C" fn audio_output_data(samples: FfiByteSlice) -> ApiResult<usize
 	let hw = lock.as_mut().unwrap();
 	let samples = samples.as_slice();
 	// We only support these two kinds.
-	let count = match hw.audio_config.sample_format {
-		common::audio::SampleFormat::SixteenBitMono => {
+	let count = match hw.audio_config.sample_format.try_into() {
+		Ok(common::audio::SampleFormat::SixteenBitMono) => {
 			hw.audio_player.play_samples_16bit_mono(samples)
 		}
-		common::audio::SampleFormat::SixteenBitStereo => {
+		Ok(common::audio::SampleFormat::SixteenBitStereo) => {
 			hw.audio_player.play_samples_16bit_stereo(samples)
 		}
 		_ => {
@@ -2387,27 +2373,27 @@ extern "C" fn bus_get_info(periperal_id: u8) -> FfiOption<common::bus::Periphera
 	match periperal_id {
 		0 => FfiOption::Some(common::bus::PeripheralInfo {
 			name: "BMC".into(),
-			kind: common::bus::PeripheralKind::Reserved,
+			kind: common::bus::PeripheralKind::Reserved.into(),
 		}),
 		1 => FfiOption::Some(common::bus::PeripheralInfo {
 			name: "SdCard".into(),
-			kind: common::bus::PeripheralKind::SdCard,
+			kind: common::bus::PeripheralKind::SdCard.into(),
 		}),
 		2 => FfiOption::Some(common::bus::PeripheralInfo {
 			name: "Slot2".into(),
-			kind: common::bus::PeripheralKind::Slot,
+			kind: common::bus::PeripheralKind::Slot.into(),
 		}),
 		3 => FfiOption::Some(common::bus::PeripheralInfo {
 			name: "Slot3".into(),
-			kind: common::bus::PeripheralKind::Slot,
+			kind: common::bus::PeripheralKind::Slot.into(),
 		}),
 		4 => FfiOption::Some(common::bus::PeripheralInfo {
 			name: "Slot4".into(),
-			kind: common::bus::PeripheralKind::Slot,
+			kind: common::bus::PeripheralKind::Slot.into(),
 		}),
 		5 => FfiOption::Some(common::bus::PeripheralInfo {
 			name: "Slot5".into(),
-			kind: common::bus::PeripheralKind::Slot,
+			kind: common::bus::PeripheralKind::Slot.into(),
 		}),
 		_ => FfiOption::None,
 	}
@@ -2455,7 +2441,7 @@ pub extern "C" fn block_dev_get_info(device: u8) -> FfiOption<common::block_dev:
 				CardState::Unplugged | CardState::Uninitialised | CardState::Errored => {
 					FfiOption::Some(common::block_dev::DeviceInfo {
 						name: FfiString::new("SdCard0"),
-						device_type: common::block_dev::DeviceType::SecureDigitalCard,
+						device_type: common::block_dev::DeviceType::SecureDigitalCard.into(),
 						block_size: 0,
 						num_blocks: 0,
 						ejectable: false,
@@ -2466,7 +2452,7 @@ pub extern "C" fn block_dev_get_info(device: u8) -> FfiOption<common::block_dev:
 				}
 				CardState::Online(info) => FfiOption::Some(common::block_dev::DeviceInfo {
 					name: FfiString::new("SdCard0"),
-					device_type: common::block_dev::DeviceType::SecureDigitalCard,
+					device_type: common::block_dev::DeviceType::SecureDigitalCard.into(),
 					block_size: 512,
 					num_blocks: info.num_blocks,
 					ejectable: false,
@@ -2518,7 +2504,7 @@ pub extern "C" fn block_read(
 	use embedded_sdmmc::BlockDevice;
 	check_stacks();
 	if data.data_len != usize::from(num_blocks) * 512 {
-		return ApiResult::Err(CError::UnsupportedConfiguration(0));
+		return ApiResult::Err(CError::UnsupportedConfiguration);
 	}
 	let mut lock = HARDWARE.lock();
 	let hw = lock.as_mut().unwrap();
@@ -2554,7 +2540,7 @@ pub extern "C" fn block_read(
 					Ok(_) => ApiResult::Ok(()),
 					Err(e) => {
 						defmt::warn!("SD error reading {}: {:?}", block.0, e);
-						ApiResult::Err(CError::DeviceError(0))
+						ApiResult::Err(CError::DeviceError)
 					}
 				}
 			}
@@ -2613,14 +2599,14 @@ extern "C" fn time_ticks_per_second() -> common::Ticks {
 }
 
 /// Control the system power.
-extern "C" fn power_control(power_mode: common::PowerMode) -> ! {
-	match power_mode {
-		common::PowerMode::Off => {
+extern "C" fn power_control(power_mode: common::FfiPowerMode) -> ! {
+	match power_mode.try_into() {
+		Ok(common::PowerMode::Off) => {
 			// TODO: Need to send a message to the BMC to turn us off.
 			// We'll just reboot for now.
 			watchdog_reboot()
 		}
-		common::PowerMode::Bootloader => {
+		Ok(common::PowerMode::Bootloader) => {
 			// Reboot to USB bootloader with no GPIOs and both USB interfaces
 			// enabled.
 			hal::rom_data::reset_to_usb_boot(0, 0);
@@ -2687,14 +2673,14 @@ fn IO_IRQ_BANK0() {
 unsafe fn HardFault(frame: &cortex_m_rt::ExceptionFrame) -> ! {
 	// TODO: check we're actually in text mode
 	let tc = console::TextConsole::new();
-	tc.set_text_buffer(unsafe { &mut vga::GLYPH_ATTR_ARRAY });
+	tc.set_text_buffer(vga::GLYPH_ATTR_ARRAY.as_ptr());
 	for _col in 0..vga::MAX_TEXT_ROWS {
 		let _ = writeln!(&tc);
 	}
 	tc.move_to(0, 0);
 	tc.change_attr(Attr::new(
-		TextForegroundColour::WHITE,
-		TextBackgroundColour::RED,
+		TextForegroundColour::White,
+		TextBackgroundColour::Red,
 		false,
 	));
 	let _ = writeln!(&tc, "+------------------------------+");

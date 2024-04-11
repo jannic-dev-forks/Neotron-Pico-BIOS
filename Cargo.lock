@@ -157,9 +157,9 @@ dependencies = [
 
 [[package]]
 name = "crc-any"
-version = "2.4.3"
+version = "2.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "774646b687f63643eb0f4bf13dc263cb581c8c9e57973b6ddf78bda3994d88df"
+checksum = "c01a5e1f881f6fb6099a7bdf949e946719fd4f1fefa56264890574febf0eb6d0"
 dependencies = [
  "debug-helper",
 ]
@@ -569,9 +569,9 @@ dependencies = [
 
 [[package]]
 name = "neotron-common-bios"
-version = "0.11.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78126c13b56ba6f62487db499cff62b0761477bd3ab6a1aa13affc03663bc276"
+checksum = "24fdb319a4bdecd68d9917e5cc026a2b50d32572649880febb1f993a0bf9ad00"
 dependencies = [
  "chrono",
  "neotron-ffi",
@@ -900,8 +900,9 @@ dependencies = [
 
 [[package]]
 name = "rp2040-hal"
-version = "0.9.0"
-source = "git+https://github.com/rp-rs/rp-hal?rev=9c17a2d#9c17a2db4dee73e407d16d283e6cb34b25b71ec9"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ff2b9ae7e6dd6720fd9f64250c9087260e50fe98b6b032ccca65be3581167ca"
 dependencies = [
  "cortex-m",
  "critical-section",
@@ -925,11 +926,13 @@ dependencies = [
 [[package]]
 name = "rp2040-hal-macros"
 version = "0.1.0"
-source = "git+https://github.com/rp-rs/rp-hal?rev=9c17a2d#9c17a2db4dee73e407d16d283e6cb34b25b71ec9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86479063e497efe1ae81995ef9071f54fd1c7427e04d6c5b84cde545ff672a5e"
 dependencies = [
+ "cortex-m-rt",
  "proc-macro2",
  "quote",
- "syn 2.0.38",
+ "syn 1.0.109",
 ]
 
 [[package]]

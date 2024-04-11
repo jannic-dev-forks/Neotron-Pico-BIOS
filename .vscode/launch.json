@@ -5,7 +5,7 @@
             "type": "probe-rs-debug",
             "request": "launch",
             "name": "Run with probe-rs",
-            "speed": 20000,
+            "speed": 10000,
             "preLaunchTask": "Cargo Build (release)",
             "flashingConfig": {
                 "flashingEnabled": true,

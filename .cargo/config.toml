@@ -2,7 +2,7 @@
 # This will make a UF2 and copy it to the RP2040's Mass Storage Device bootloader
 # runner = "elf2uf2-rs -d"
 # This will flash over SWD with any compatible probe it finds.
-runner = "probe-rs run --chip RP2040"
+runner = "probe-rs run --chip RP2040 --speed 10000"
 rustflags = [
   # This is needed if your flash or ram addresses are not aligned to 0x10000 in memory.x
   # See https://github.com/rust-embedded/cortex-m-quickstart/pull/95
